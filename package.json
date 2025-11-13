@@ -1,7 +1,7 @@
 {
 	"name": "pkg-name",
 	"version": "0.0.0",
-	"packageManager": "pnpm@10.20.0",
+	"packageManager": "pnpm@10.22.0",
 	"author": "Ray <i@mk1.io> (@so1ve)",
 	"type": "module",
 	"description": "",
@@ -51,7 +51,7 @@
 		"@so1ve/eslint-config": "^3.11.2",
 		"@so1ve/prettier-config": "^3.11.2",
 		"@types/node": "^24.9.2",
-		"@typescript/native-preview": "7.0.0-dev.20251029.1",
+		"@typescript/native-preview": "7.0.0-dev.20251113.1",
 		"bumpp": "^10.3.1",
 		"eslint": "^9.38.0",
 		"prettier": "^3.6.2",
