@@ -1,21 +1,27 @@
-# pkg-name
-
-[![NPM version](https://img.shields.io/npm/v/pkg-name?color=a1b858&label=)](https://www.npmjs.com/package/pkg-name)
-
-## 💎 Features
-
-## 📦 Installation
-
-```bash
-$ npm install pkg-name
-$ yarn add pkg-name
-$ pnpm add pkg-name
-```
+# Hashi
 
 ## 🚀 Usage
 
-```ts
+```txt
+npm install
+npm run dev
+```
 
+```txt
+npm run deploy
+```
+
+[For generating/synchronizing types based on your Worker configuration run](https://developers.cloudflare.com/workers/wrangler/commands/#types):
+
+```txt
+npm run cf-typegen
+```
+
+Pass the `CloudflareBindings` as generics when instantiation `Hono`:
+
+```ts
+// src/index.ts
+const app = new Hono<{ Bindings: CloudflareBindings }>();
 ```
 
 ## 📝 License
