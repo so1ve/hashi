@@ -5,7 +5,5 @@
 	"editor.inlayHints.enabled": "off",
 	"deno.enable": true,
 	"typescript.tsserver.experimental.enableProjectDiagnostics": false,
-	"[json]": {
-		"editor.defaultFormatter": "denoland.vscode-deno"
-	}
+	"editor.defaultFormatter": "denoland.vscode-deno"
 }

@@ -1,9 +1,7 @@
 {
-	"imports": {
-		"hono": "jsr:@hono/hono@^4.10.5"
-	},
 	"tasks": {
-		"start": "deno run --allow-net src/main.ts"
+		"start": "deno run --allow-net --allow-env src/main.ts",
+		"watch": "deno run --allow-net --allow-env --watch src/main.ts"
 	},
 	"compilerOptions": {
 		"jsx": "precompile",
@@ -13,5 +11,11 @@
 		"useTabs": true,
 		"quoteProps": "consistent",
 		"useBraces": "always"
+	},
+	"imports": {
+		"@biomejs/biome": "npm:@biomejs/biome@^2.3.5",
+		"@std/dotenv": "jsr:@std/dotenv@^0.225.5",
+		"hono": "jsr:@hono/hono@^4.10.5",
+		"ofetch": "npm:ofetch@^2.0.0-alpha.3"
 	}
 }
