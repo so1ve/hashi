@@ -6,6 +6,10 @@ compatibility_flags = ["nodejs_compat"]
 [observability]
 enabled = true
 
+[vars]
+BOT_TOKEN = ""
+GROUP_ID = ""
+
 [[kv_namespaces]]
 binding = "KV"
 id = "cacdee312f844c08be91e5f631652cec"
