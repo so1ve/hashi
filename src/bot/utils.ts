@@ -21,6 +21,25 @@ async function topicExists(ctx: HashiContext, topicId: number) {
 
 const topicCreationRequests = new Map<number, AbortController>();
 
+function getTopicName(ctx: HashiContext) {
+	// Must be called within a context where ctx.chat is defined, like user private chats
+	const chat = ctx.chat!;
+
+	if (chat.first_name) {
+		const fullName = chat.last_name
+			? `${chat.first_name} ${chat.last_name}`
+			: chat.first_name;
+
+		return fullName;
+	}
+
+	if (chat.username) {
+		return `@${chat.username}`;
+	}
+
+	return `User ${ctx.chatId}`;
+}
+
 export async function ensureTopic(ctx: HashiContext, privateChatId: number) {
 	const topicId = await kv.topicIdFromPrivateChatId.get(privateChatId);
 	if (topicId && (await topicExists(ctx, topicId))) {
@@ -29,8 +48,7 @@ export async function ensureTopic(ctx: HashiContext, privateChatId: number) {
 		return topicId;
 	}
 
-	// Must be called within a context where ctx.chat is defined, like user private chats
-	const title = ctx.chat!.first_name ?? `Chat ${privateChatId}`;
+	const title = getTopicName(ctx);
 
 	const result = await avoidReductantCalls(
 		topicCreationRequests,
