@@ -46,8 +46,7 @@ export const privateChatIdFromTopicId = createCachedKv<number, number>(
 	mappingCache,
 	(key) => `topic_to_private_chat:${key}`,
 );
-
 export const blockedUsers = createCachedKv<number, boolean>(
 	blockedUsersCache,
-	(key) => `blocked_user:${key}`,
+	(key) => `user_blocked:${key}`,
 );
