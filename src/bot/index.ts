@@ -1,7 +1,7 @@
 import { autoRetry } from "@grammyjs/auto-retry";
 import type { HydrateFlavor } from "@grammyjs/hydrate";
 import { hydrate } from "@grammyjs/hydrate";
-import { Menu } from "@grammyjs/menu";
+import { Menu, MenuRange } from "@grammyjs/menu";
 import { b, fmt } from "@grammyjs/parse-mode";
 import { addReplyParam } from "@roziscoding/grammy-autoquote";
 import { env } from "cloudflare:workers";
@@ -10,8 +10,8 @@ import { Bot } from "grammy";
 
 import * as kv from "../kv";
 import { Aborted } from "../utils";
+import { guard } from "./guard";
 import { ensureTopic } from "./utils";
-import { verify } from "./verify";
 
 export type HashiContext = HydrateFlavor<Context>;
 // don't check env existence here because we have `env-checker` middleware
@@ -25,110 +25,136 @@ await bot.api.setMyCommands([
 	{ command: "start", description: "Start the bot" },
 ]);
 
-const verificationMenu = new Menu("verification").webApp(
-	"Click to Verify",
-	"https://example.com/verify",
-);
+const initialized = false;
 
-bot.use(verificationMenu);
-
-bot.command("start", verify, async (ctx) => {
-	const user = await kv.users.get(ctx.chatId);
-	if (!user) {
-		await kv.users.set(ctx.chatId, { blocked: false, verified: false });
+export function initializeBot(hostname: string) {
+	if (initialized) {
+		return;
 	}
 
-	if (!user?.verified) {
-		await ctx.reply("Please verify yourself using the button below.", {
-			reply_markup: verificationMenu,
-		});
-	}
+	const verificationMenu = new Menu<HashiContext>("verification")
+		.dynamic((ctx) => {
+			const range = new MenuRange<HashiContext>();
 
-	await ensureTopic(ctx, ctx.chatId);
+			range.webApp(
+				"Click to Verify",
+				`https://${hostname}/verify?chatId=${ctx.chatId}&messageId=${ctx.message?.message_id}`,
+			);
 
-	await ctx.reply("Hello! I'm Hashi.");
-});
+			return range;
+		})
+		.text("Cancel", (ctx) => ctx.deleteMessage());
 
-bot.command("block").filter(
-	async (ctx) => ctx.chat.id === Number.parseInt(env.GROUP_ID),
-	async (ctx) => {
-		ctx.api.config.use(addReplyParam(ctx));
+	bot.use(verificationMenu);
 
-		if (!ctx.message) {
-			await ctx.reply("ctx.message not found!");
+	bot.command("start").filter(
+		async (ctx) => ctx.chat.type === "private",
+		guard,
+		async (ctx) => {
+			const user = await kv.users.get(ctx.chatId);
+			if (!user) {
+				await kv.users.set(ctx.chatId, { blocked: false, verified: false });
+			}
 
-			return;
-		}
+			if (!user?.verified) {
+				if (!verificationMenu) {
+					throw new Error("Verification menu not initialized");
+				}
+				await ctx.reply("Please verify yourself using the button below.", {
+					reply_markup: verificationMenu,
+				});
 
-		if (!ctx.message?.message_thread_id) {
-			await ctx.reply("Please use this command in a topic.");
+				return;
+			}
 
-			return;
-		}
+			await ensureTopic(ctx, ctx.chatId);
 
-		const topicId = ctx.message.message_thread_id;
-		const privateChatId = await kv.privateChatIdFromTopicId.get(topicId);
+			await ctx.reply("Hello! I'm Hashi.");
+		},
+	);
 
-		if (!privateChatId) {
-			await ctx.reply("Could not find the private chat ID for this topic.");
+	bot.command("block").filter(
+		async (ctx) => ctx.chat.id === Number.parseInt(env.GROUP_ID),
+		async (ctx) => {
+			ctx.api.config.use(addReplyParam(ctx));
 
-			return;
-		}
+			if (!ctx.message) {
+				await ctx.reply("ctx.message not found!");
 
-		const param = ctx.match || "true";
+				return;
+			}
 
-		if (param !== "true" && param !== "false") {
-			const combined = fmt`Please provide ${b}true${b} or ${b}false${b} as parameter.`;
+			if (!ctx.message?.message_thread_id) {
+				await ctx.reply("Please use this command in a topic.");
+
+				return;
+			}
+
+			const topicId = ctx.message.message_thread_id;
+			const privateChatId = await kv.privateChatIdFromTopicId.get(topicId);
+
+			if (!privateChatId) {
+				await ctx.reply("Could not find the private chat ID for this topic.");
+
+				return;
+			}
+
+			const param = ctx.match || "true";
+
+			if (param !== "true" && param !== "false") {
+				const combined = fmt`Please provide ${b}true${b} or ${b}false${b} as parameter.`;
+				await ctx.reply(combined.text, {
+					entities: combined.entities,
+				});
+
+				return;
+			}
+			const blocked = param === "true";
+			const user = (await kv.users.get(privateChatId)) ?? {};
+
+			await kv.users.set(privateChatId, { ...user, blocked });
+			const combined = fmt`This user has been ${b}${blocked ? "blocked" : "unblocked"}${b}.`;
 			await ctx.reply(combined.text, {
 				entities: combined.entities,
 			});
+		},
+	);
 
-			return;
-		}
-		const blocked = param === "true";
-		const user = (await kv.users.get(privateChatId)) ?? {};
-		await kv.users.set(privateChatId, { ...user, blocked });
-		const combined = fmt`This user has been ${b}${blocked ? "blocked" : "unblocked"}${b}.`;
-		await ctx.reply(combined.text, {
-			entities: combined.entities,
-		});
-	},
-);
+	bot.on("message").filter(
+		async (ctx) => ctx.chat.type === "private",
+		guard,
+		async (ctx) => {
+			const topicId = await ensureTopic(ctx, ctx.chatId);
 
-bot.on("message").filter(
-	async (ctx) => ctx.chat.type === "private",
-	verify,
-	async (ctx) => {
-		const topicId = await ensureTopic(ctx, ctx.chatId);
+			if (topicId === Aborted) {
+				return;
+			}
 
-		if (topicId === Aborted) {
-			return;
-		}
+			await ctx.message.copy(env.GROUP_ID, { message_thread_id: topicId });
+		},
+	);
 
-		await ctx.message.copy(env.GROUP_ID, { message_thread_id: topicId });
-	},
-);
+	bot.on("message:is_topic_message").filter(
+		async (ctx) =>
+			!ctx.from.is_bot && ctx.chat.id === Number.parseInt(env.GROUP_ID),
+		async (ctx) => {
+			const topicId = ctx.message.message_thread_id;
+			const privateChatId = await kv.privateChatIdFromTopicId.get(topicId);
 
-bot.on("message:is_topic_message").filter(
-	async (ctx) =>
-		!ctx.from.is_bot && ctx.chat.id === Number.parseInt(env.GROUP_ID),
-	async (ctx) => {
-		const topicId = ctx.message.message_thread_id;
-		const privateChatId = await kv.privateChatIdFromTopicId.get(topicId);
+			if (!privateChatId) {
+				await ctx.reply("Could not find the private chat ID for this topic.");
 
-		if (!privateChatId) {
-			await ctx.reply("Could not find the private chat ID for this topic.");
+				return;
+			}
 
-			return;
-		}
+			const isBlocked = await kv.users.get(privateChatId);
+			if (isBlocked) {
+				await ctx.reply("This user has been blocked from using this bot.");
 
-		const isBlocked = await kv.users.get(privateChatId);
-		if (isBlocked) {
-			await ctx.reply("This user has been blocked from using this bot.");
+				return;
+			}
 
-			return;
-		}
-
-		await ctx.message.copy(privateChatId);
-	},
-);
+			await ctx.message.copy(privateChatId);
+		},
+	);
+}

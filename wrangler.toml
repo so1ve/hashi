@@ -9,6 +9,8 @@ enabled = true
 [vars]
 BOT_TOKEN = ""
 GROUP_ID = ""
+TURNSTILE_SITE_KEY = ""
+TURNSTILE_SECRET_KEY = ""
 
 [[kv_namespaces]]
 binding = "KV"
