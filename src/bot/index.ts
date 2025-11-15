@@ -1,15 +1,17 @@
 import { autoRetry } from "@grammyjs/auto-retry";
 import type { HydrateFlavor } from "@grammyjs/hydrate";
 import { hydrate } from "@grammyjs/hydrate";
+import { Menu } from "@grammyjs/menu";
 import { b, fmt } from "@grammyjs/parse-mode";
 import { addReplyParam } from "@roziscoding/grammy-autoquote";
-import type { AbortController } from "abort-controller";
 import { env } from "cloudflare:workers";
 import type { Context } from "grammy";
 import { Bot } from "grammy";
 
 import * as kv from "../kv";
-import { Aborted, avoidReductantCalls } from "../utils";
+import { Aborted } from "../utils";
+import { ensureTopic } from "./utils";
+import { verify } from "./verify";
 
 export type HashiContext = HydrateFlavor<Context>;
 // don't check env existence here because we have `env-checker` middleware
@@ -23,62 +25,28 @@ await bot.api.setMyCommands([
 	{ command: "start", description: "Start the bot" },
 ]);
 
-async function topicExists(ctx: Context, topicId: number) {
-	try {
-		await ctx.api.reopenForumTopic(env.GROUP_ID, topicId);
+const verificationMenu = new Menu("verification").webApp(
+	"Click to Verify",
+	"https://example.com/verify",
+);
 
-		return true;
-	} catch (e: any) {
-		if (e.description.includes("TOPIC_NOT_MODIFIED")) {
-			return true;
-		}
+bot.use(verificationMenu);
 
-		return false;
-	}
-}
-
-const topicCreationRequests = new Map<number, AbortController>();
-
-async function ensureTopic(ctx: Context, privateChatId: number) {
-	const topicId = await kv.topicIdFromPrivateChatId.get(privateChatId);
-	if (topicId && (await topicExists(ctx, topicId))) {
-		await kv.privateChatIdFromTopicId.set(topicId, privateChatId);
-
-		return topicId;
+bot.command("start", verify, async (ctx) => {
+	const user = await kv.users.get(ctx.chatId);
+	if (!user) {
+		await kv.users.set(ctx.chatId, { blocked: false, verified: false });
 	}
 
-	// Must be called within a context where ctx.chat is defined, like user private chats
-	const title = ctx.chat!.first_name ?? `Chat ${privateChatId}`;
-
-	const result = await avoidReductantCalls(
-		topicCreationRequests,
-		privateChatId,
-		async (signal) => {
-			const topic = await ctx.api.createForumTopic(
-				env.GROUP_ID,
-				title,
-				undefined,
-				signal,
-			);
-
-			return topic.message_thread_id;
-		},
-	);
-
-	if (result !== Aborted) {
-		await kv.topicIdFromPrivateChatId.set(privateChatId, result);
-		await kv.privateChatIdFromTopicId.set(result, privateChatId);
+	if (!user?.verified) {
+		await ctx.reply("Please verify yourself using the button below.", {
+			reply_markup: verificationMenu,
+		});
 	}
-
-	return result;
-}
-
-bot.command("start", async (ctx) => {
-	await ctx.reply(
-		"Hello! I'm hashi. Send me a message in private chat, and I'll create a forum topic for you in the group.",
-	);
 
 	await ensureTopic(ctx, ctx.chatId);
+
+	await ctx.reply("Hello! I'm Hashi.");
 });
 
 bot.command("block").filter(
@@ -129,14 +97,8 @@ bot.command("block").filter(
 
 bot.on("message").filter(
 	async (ctx) => ctx.chat.type === "private",
+	verify,
 	async (ctx) => {
-		const user = await kv.users.get(ctx.from.id);
-		if (user?.blocked) {
-			await ctx.reply("You are blocked from using this bot.");
-
-			return;
-		}
-
 		const topicId = await ensureTopic(ctx, ctx.chatId);
 
 		if (topicId === Aborted) {
