@@ -15,13 +15,6 @@ export function registerForwarder(
 		async (ctx) => ctx.chat.type === "private",
 		guard(verificationMenu),
 		async (ctx) => {
-			const user = await kv.users.get(ctx.chatId);
-			if (!user?.verified) {
-				await ctx.reply("You need to pass verification to use this bot.");
-
-				return;
-			}
-
 			const topicId = await ensureTopic(ctx, ctx.chatId);
 
 			if (topicId === Aborted) {

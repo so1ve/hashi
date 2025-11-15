@@ -5,6 +5,7 @@ import type { Context } from "grammy";
 import { Bot } from "grammy";
 
 import { registerBlockCommand } from "./block";
+import { registerBotBlockedNotifier } from "./bot-blocked-notifier";
 import { registerForwarder } from "./forwarder";
 import { guard } from "./guard";
 import { ensureTopic } from "./utils";
@@ -54,4 +55,5 @@ export function initializeBot(hostname: string) {
 
 	registerBlockCommand(bot);
 	registerForwarder(bot, verificationMenu);
+	registerBotBlockedNotifier(bot);
 }
