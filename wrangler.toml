@@ -1,0 +1,11 @@
+name = "hashi"
+compatibility_date = "2025-08-03"
+main = "./src/index.ts"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+[[kv_namespaces]]
+binding = "KV"
+id = "cacdee312f844c08be91e5f631652cec"

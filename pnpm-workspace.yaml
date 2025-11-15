@@ -1,0 +1,6 @@
+onlyBuiltDependencies:
+  - cloudflared
+  - esbuild
+  - sharp
+  - unrs-resolver
+  - workerd

@@ -1,0 +1,37 @@
+{
+	"name": "hashi",
+	"packageManager": "pnpm@10.22.0",
+	"type": "module",
+	"scripts": {
+		"build": "vite build",
+		"cf-typegen": "wrangler types --env-interface CloudflareBindings",
+		"deploy": "pnpm run build && wrangler deploy",
+		"dev": "vite",
+		"postinstall": "pnpm cf-typegen",
+		"lint": "eslint . && prettier . --check",
+		"lint:fix": "eslint . --fix && prettier . --write",
+		"preview": "pnpm run build && vite preview",
+		"tunnel": "cloudflared tunnel --url http://localhost:5173",
+		"typecheck": "tsgo --noEmit"
+	},
+	"dependencies": {
+		"hono": "^4.10.5"
+	},
+	"devDependencies": {
+		"@cloudflare/vite-plugin": "^1.2.3",
+		"@grammyjs/auto-retry": "^2.0.2",
+		"@grammyjs/hydrate": "^1.6.0",
+		"@so1ve/eslint-config": "^3.11.3",
+		"@so1ve/prettier-config": "^3.11.3",
+		"@types/node": "^24.10.1",
+		"@typescript/native-preview": "7.0.0-dev.20251113.1",
+		"cloudflared": "^0.7.1",
+		"eslint": "^9.39.1",
+		"grammy": "^1.38.3",
+		"prettier": "^3.6.2",
+		"quick-lru": "^7.3.0",
+		"typescript": "^5.9.3",
+		"vite": "^7.2.2",
+		"wrangler": "^4.17.0"
+	}
+}

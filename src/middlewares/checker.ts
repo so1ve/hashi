@@ -1,10 +1,8 @@
 import { createMiddleware } from "hono/factory";
 
-export const envChecker = createMiddleware(async (c, next) => {
-	const requiredEnvVars = ["BOT_TOKEN", "CHAT_ID"];
-	const missingEnvVars = requiredEnvVars.filter((varName) =>
-		!Deno.env.get(varName)
-	);
+export const checker = createMiddleware(async (c, next) => {
+	const requiredEnvVars = ["BOT_TOKEN", "GROUP_ID", "KV"];
+	const missingEnvVars = requiredEnvVars.filter((varName) => !c.env[varName]);
 
 	if (missingEnvVars.length > 0) {
 		return c.text(

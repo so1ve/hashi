@@ -1,5 +1,3 @@
 {
-	"recommendations": [
-		"denoland.vscode-deno"
-	]
+	"recommendations": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"]
 }
