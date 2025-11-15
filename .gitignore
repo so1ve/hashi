@@ -16,7 +16,7 @@ node_modules/
 .wrangler
 
 # env
-.env.development
+.env.local
 .env.production
 .dev.vars
 
