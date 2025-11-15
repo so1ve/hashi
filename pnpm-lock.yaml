@@ -48,6 +48,9 @@ importers:
       cloudflared:
         specifier: ^0.7.1
         version: 0.7.1
+      defu:
+        specifier: ^6.1.4
+        version: 6.1.4
       eslint:
         specifier: ^9.39.1
         version: 9.39.1(jiti@2.6.1)

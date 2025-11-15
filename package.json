@@ -30,6 +30,7 @@
 		"@typescript/native-preview": "7.0.0-dev.20251113.1",
 		"abort-controller": "^3.0.0",
 		"cloudflared": "^0.7.1",
+		"defu": "^6.1.4",
 		"eslint": "^9.39.1",
 		"grammy": "^1.38.3",
 		"prettier": "^3.6.2",
