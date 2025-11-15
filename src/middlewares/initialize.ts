@@ -38,7 +38,7 @@ export const initialize = createMiddleware(async (c, next) => {
 		await bot.api.setWebhook(`https://${hostname}/webhook`);
 
 		await initializeSettings();
-		initializeBot(hostname);
+		await initializeBot(hostname);
 
 		await checkPermissions();
 	}

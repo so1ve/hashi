@@ -30,18 +30,18 @@ bot.use(
 	}),
 );
 
-await bot.api.setMyCommands([
-	{ command: "start", description: "Start the bot" },
-	{ command: "block", description: "Block user" },
-	{ command: "settings", description: "Configure your settings" },
-]);
-
 const initialized = false;
 
-export function initializeBot(hostname: string) {
+export async function initializeBot(hostname: string) {
 	if (initialized) {
 		return;
 	}
+
+	await bot.api.setMyCommands([
+		{ command: "start", description: "Start the bot" },
+		{ command: "block", description: "Block user" },
+		{ command: "settings", description: "Configure your settings" },
+	]);
 
 	const verificationMenu = new Menu<HashiContext>("verification")
 		.dynamic((ctx) => {
