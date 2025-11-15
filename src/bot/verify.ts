@@ -9,7 +9,7 @@ export async function sendVerification(
 	verificationMenu: Menu<HashiContext>,
 	chatId: number,
 ) {
-	const user = await kv.users.get(chatId);
+	let user = await kv.users.get(chatId);
 	if (!user) {
 		await kv.users.set(chatId, { blocked: false, verified: false });
 	}
@@ -28,6 +28,7 @@ export async function sendVerification(
 			},
 		);
 
+		user = await kv.users.get(chatId);
 		await kv.users.set(chatId, {
 			...user,
 			verificationMessageId: message.message_id,
