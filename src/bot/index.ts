@@ -4,6 +4,7 @@ import { Menu, MenuRange } from "@grammyjs/menu";
 import type { Context, SessionFlavor } from "grammy";
 import { Bot, session } from "grammy";
 
+import * as kv from "../kv";
 import { registerBlockCommand } from "./block";
 import { registerBotBlockedNotifier } from "./bot-blocked-notifier";
 import { registerForwarder } from "./forwarder";
@@ -62,7 +63,8 @@ export function initializeBot(hostname: string) {
 		async (ctx) => {
 			await ensureTopic(ctx, ctx.chatId);
 
-			await ctx.reply("Hello! I'm Hashi.");
+			const settings = await kv.settings.get();
+			await ctx.reply(settings.text.welcome);
 		},
 	);
 
