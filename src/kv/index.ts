@@ -5,10 +5,9 @@
 import { env } from "cloudflare:workers";
 import QuickLRU from "quick-lru";
 
-const { KV } = env;
+import type { User } from "../types";
 
-const mappingCache = new QuickLRU<string, number>({ maxSize: 1000 });
-const blockedUsersCache = new QuickLRU<string, boolean>({ maxSize: 1000 });
+const { KV } = env;
 
 const createCachedKv = <V, R>(
 	cache: QuickLRU<string, R>,
@@ -38,6 +37,9 @@ const createCachedKv = <V, R>(
 	},
 });
 
+const mappingCache = new QuickLRU<string, number>({ maxSize: 1000 });
+const blockedUsersCache = new QuickLRU<string, User>({ maxSize: 1000 });
+
 export const topicIdFromPrivateChatId = createCachedKv<number, number>(
 	mappingCache,
 	(key) => `private_chat_to_topic:${key}`,
@@ -46,7 +48,7 @@ export const privateChatIdFromTopicId = createCachedKv<number, number>(
 	mappingCache,
 	(key) => `topic_to_private_chat:${key}`,
 );
-export const blockedUsers = createCachedKv<number, boolean>(
+export const blockedUsers = createCachedKv<number, User>(
 	blockedUsersCache,
-	(key) => `user_blocked:${key}`,
+	(key) => `user:${key}`,
 );
