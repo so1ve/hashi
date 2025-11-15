@@ -1,6 +1,7 @@
 import type { HydrateFlavor } from "@grammyjs/hydrate";
 import { hydrate } from "@grammyjs/hydrate";
 import { Menu, MenuRange } from "@grammyjs/menu";
+import { env } from "cloudflare:workers";
 import type { Context, SessionFlavor } from "grammy";
 import { Bot, session } from "grammy";
 
@@ -19,7 +20,7 @@ interface SessionData {
 
 export type HashiContext = HydrateFlavor<Context & SessionFlavor<SessionData>>;
 // don't check env existence here because we have `env-checker` middleware
-export const bot = new Bot<HashiContext>(process.env.BOT_TOKEN);
+export const bot = new Bot<HashiContext>(env.BOT_TOKEN);
 export type HashiBot = typeof bot;
 
 bot.use(hydrate());
