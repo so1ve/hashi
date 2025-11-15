@@ -1,75 +1,172 @@
 import { autoRetry } from "@grammyjs/auto-retry";
 import type { HydrateFlavor } from "@grammyjs/hydrate";
 import { hydrate } from "@grammyjs/hydrate";
+import { b, fmt } from "@grammyjs/parse-mode";
+import { addReplyParam } from "@roziscoding/grammy-autoquote";
+import type { AbortController } from "abort-controller";
+import { env } from "cloudflare:workers";
 import type { Context } from "grammy";
 import { Bot } from "grammy";
 
-import { ensureUserTopic, getPrivateChatIdFromTopicId } from "../database";
+import * as kv from "../kv";
+import { Aborted, avoidReductantCalls } from "../utils";
 
-type MyContext = HydrateFlavor<Context>;
-
+export type HashiContext = HydrateFlavor<Context>;
 // don't check env existence here because we have `env-checker` middleware
-export const bot = new Bot<MyContext>(process.env.BOT_TOKEN);
+export const bot = new Bot<HashiContext>(process.env.BOT_TOKEN);
+export type HashiBot = typeof bot;
 
 bot.use(hydrate());
 bot.api.config.use(autoRetry());
 
-// Handle private messages from users
-bot.on("message").filter(
-	async (ctx) => !ctx.message.is_topic_message,
-	async (ctx) => {
-		const privateChatId = ctx.chat.id;
-		const text = ctx.message.text ?? "";
+await bot.api.setMyCommands([
+	{ command: "start", description: "Start the bot" },
+]);
 
-		try {
-			// Get user info
-			const userInfo = {
-				id: ctx.from.id,
-				username: ctx.from.username ?? `User_${privateChatId}`,
-				nickname:
-					ctx.from.first_name +
-					(ctx.from.last_name ? ` ${ctx.from.last_name}` : ""),
-			};
+const topicCreationRequests = new Map<number, AbortController>();
 
-			// Ensure topic exists (with concurrency control)
-			const topicId = await ensureUserTopic(
-				privateChatId,
-				process.env.BOT_TOKEN,
-				process.env.GROUP_ID,
-				userInfo,
+async function topicExists(ctx: Context, topicId: number) {
+	try {
+		await ctx.api.reopenForumTopic(env.GROUP_ID, topicId);
+
+		return true;
+	} catch (e: any) {
+		if (e.description.includes("TOPIC_NOT_MODIFIED")) {
+			return true;
+		}
+
+		return false;
+	}
+}
+
+async function ensureTopic(ctx: Context, privateChatId: number) {
+	const topicId = await kv.topicIdFromPrivateChatId.get(privateChatId);
+	if (topicId && (await topicExists(ctx, topicId))) {
+		await kv.privateChatIdFromTopicId.set(topicId, privateChatId);
+
+		return topicId;
+	}
+
+	// Must be called within a context where ctx.chat is defined, like user private chats
+	const title = ctx.chat!.first_name ?? `Chat ${privateChatId}`;
+
+	const result = await avoidReductantCalls(
+		topicCreationRequests,
+		privateChatId,
+		async (signal) => {
+			const topic = await ctx.api.createForumTopic(
+				env.GROUP_ID,
+				title,
+				undefined,
+				signal,
 			);
 
-			// Forward message to topic
-			const formattedMessage = `${userInfo.nickname}:\n${text}`;
-			await ctx.api.sendMessage(process.env.GROUP_ID, formattedMessage, {
-				message_thread_id: topicId,
+			return topic.message_thread_id;
+		},
+	);
+
+	if (result !== Aborted) {
+		await kv.topicIdFromPrivateChatId.set(privateChatId, result);
+		await kv.privateChatIdFromTopicId.set(result, privateChatId);
+	}
+
+	return result;
+}
+
+bot.command("start", async (ctx) => {
+	await ctx.reply(
+		"Hello! I'm hashi. Send me a message in private chat, and I'll create a forum topic for you in the group.",
+	);
+
+	await ensureTopic(ctx, ctx.chatId);
+});
+
+bot.command("block").filter(
+	async (ctx) => ctx.chat.id === Number.parseInt(env.GROUP_ID),
+	async (ctx) => {
+		ctx.api.config.use(addReplyParam(ctx));
+
+		if (!ctx.message) {
+			await ctx.reply("ctx.message not found!");
+
+			return;
+		}
+
+		if (!ctx.message?.message_thread_id) {
+			await ctx.reply("Please use this command in a topic.");
+
+			return;
+		}
+
+		const topicId = ctx.message.message_thread_id;
+		const privateChatId = await kv.privateChatIdFromTopicId.get(topicId);
+
+		if (!privateChatId) {
+			await ctx.reply("Could not find the private chat ID for this topic.");
+
+			return;
+		}
+
+		const param = ctx.match || "true";
+
+		if (param !== "true" && param !== "false") {
+			const combined = fmt`Please provide ${b}true${b} or ${b}false${b} as parameter.`;
+			await ctx.reply(combined.text, {
+				entities: combined.entities,
 			});
 
-			// Confirm to user
-			await ctx.reply("消息已发送！");
-		} catch (error) {
-			console.error("Error handling private message:", error);
-			await ctx.reply("消息发送失败，请稍后重试。");
+			return;
 		}
+
+		await kv.blockedUsers.set(privateChatId, param === "true");
+		const combined = fmt`This user has been ${b}${param === "true" ? "blocked" : "unblocked"}${b}.`;
+		await ctx.reply(combined.text, {
+			entities: combined.entities,
+		});
+	},
+);
+
+bot.on("message").filter(
+	async (ctx) => ctx.chat.type === "private",
+	async (ctx) => {
+		const isBlocked = await kv.blockedUsers.get(ctx.from.id);
+		if (isBlocked) {
+			await ctx.reply("You are blocked from using this bot.");
+
+			return;
+		}
+
+		const topicId = await ensureTopic(ctx, ctx.chatId);
+
+		if (topicId === Aborted) {
+			return;
+		}
+
+		await ctx.message.copy(env.GROUP_ID, { message_thread_id: topicId });
 	},
 );
 
 // Handle messages in group topics - forward back to private chat
-bot.on("message:is_topic_message", async (ctx) => {
-	const topicId = ctx.message.message_thread_id;
-	if (!topicId) {
-		return;
-	}
+bot.on("message:is_topic_message").filter(
+	async (ctx) =>
+		!ctx.from.is_bot && ctx.chat.id === Number.parseInt(env.GROUP_ID),
+	async (ctx) => {
+		const topicId = ctx.message.message_thread_id;
+		const privateChatId = await kv.privateChatIdFromTopicId.get(topicId);
 
-	try {
-		// Get the private chat ID associated with this topic
-		const privateChatId = await getPrivateChatIdFromTopicId(topicId);
+		if (!privateChatId) {
+			await ctx.reply("Could not find the private chat ID for this topic.");
 
-		if (privateChatId) {
-			const text = ctx.message.text ?? "";
-			await ctx.api.sendMessage(privateChatId, text);
+			return;
 		}
-	} catch (error) {
-		console.error("Error handling topic message:", error);
-	}
-});
+
+		const isBlocked = await kv.blockedUsers.get(privateChatId);
+		if (isBlocked) {
+			await ctx.reply("This user has been blocked from using this bot.");
+
+			return;
+		}
+
+		await ctx.message.copy(privateChatId);
+	},
+);
