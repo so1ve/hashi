@@ -118,8 +118,8 @@ bot.command("block").filter(
 			return;
 		}
 		const blocked = param === "true";
-		const user = (await kv.blockedUsers.get(privateChatId)) ?? {};
-		await kv.blockedUsers.set(privateChatId, { ...user, blocked });
+		const user = (await kv.users.get(privateChatId)) ?? {};
+		await kv.users.set(privateChatId, { ...user, blocked });
 		const combined = fmt`This user has been ${b}${blocked ? "blocked" : "unblocked"}${b}.`;
 		await ctx.reply(combined.text, {
 			entities: combined.entities,
@@ -130,7 +130,7 @@ bot.command("block").filter(
 bot.on("message").filter(
 	async (ctx) => ctx.chat.type === "private",
 	async (ctx) => {
-		const user = await kv.blockedUsers.get(ctx.from.id);
+		const user = await kv.users.get(ctx.from.id);
 		if (user?.blocked) {
 			await ctx.reply("You are blocked from using this bot.");
 
@@ -160,7 +160,7 @@ bot.on("message:is_topic_message").filter(
 			return;
 		}
 
-		const isBlocked = await kv.blockedUsers.get(privateChatId);
+		const isBlocked = await kv.users.get(privateChatId);
 		if (isBlocked) {
 			await ctx.reply("This user has been blocked from using this bot.");
 
