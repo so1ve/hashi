@@ -4,7 +4,7 @@ import { verifySuccess } from "../bot/verify";
 import type { Env } from "../types";
 
 export const verifyCallback: Handler<Env> = async (c) => {
-	const { token, chatId, messageId } = await c.req.json();
+	const { token, chatId } = await c.req.json();
 
 	// verify https://challenges.cloudflare.com/turnstile/v0/siteverify
 	const data: any = await fetch(
@@ -25,7 +25,7 @@ export const verifyCallback: Handler<Env> = async (c) => {
 		return c.json({ status: "error", message: "Verification failed" });
 	}
 
-	await verifySuccess(Number.parseInt(chatId), messageId);
+	await verifySuccess(Number.parseInt(chatId));
 
 	return c.json({ status: "ok" });
 };

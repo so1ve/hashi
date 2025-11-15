@@ -1,4 +1,3 @@
-import { autoRetry } from "@grammyjs/auto-retry";
 import type { HydrateFlavor } from "@grammyjs/hydrate";
 import { hydrate } from "@grammyjs/hydrate";
 import { Menu, MenuRange } from "@grammyjs/menu";
@@ -19,7 +18,7 @@ export const bot = new Bot<HashiContext>(process.env.BOT_TOKEN);
 export type HashiBot = typeof bot;
 
 bot.use(hydrate());
-bot.api.config.use(autoRetry());
+// bot.api.config.use(autoRetry());
 
 await bot.api.setMyCommands([
 	{ command: "start", description: "Start the bot" },
@@ -38,7 +37,7 @@ export function initializeBot(hostname: string) {
 
 			range.webApp(
 				"Click to Verify",
-				`https://${hostname}/verify?chatId=${ctx.chatId}&messageId=${ctx.message?.message_id}`,
+				`https://${hostname}/verify?chatId=${ctx.chatId}`,
 			);
 
 			return range;
@@ -56,12 +55,26 @@ export function initializeBot(hostname: string) {
 				await kv.users.set(ctx.chatId, { blocked: false, verified: false });
 			}
 
-			if (!user?.verified) {
+			if (user?.verified) {
+				if (user?.verificationMessageId) {
+					try {
+						await ctx.api.deleteMessage(ctx.chatId, user.verificationMessageId);
+					} catch {}
+				}
+
 				if (!verificationMenu) {
 					throw new Error("Verification menu not initialized");
 				}
-				await ctx.reply("Please verify yourself using the button below.", {
-					reply_markup: verificationMenu,
+				const message = await ctx.reply(
+					"Please verify yourself using the button below.",
+					{
+						reply_markup: verificationMenu,
+					},
+				);
+
+				await kv.users.set(ctx.chatId, {
+					...user,
+					verificationMessageId: message.message_id,
 				});
 
 				return;

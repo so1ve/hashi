@@ -14,7 +14,6 @@ declare global {
 async function onTurnstileSuccess(token: string) {
 	const params = new URLSearchParams(location.search);
 	const chatId = params.get("chatId");
-	const messageId = params.get("messageId");
 
 	await fetch("/verify/callback", {
 		method: "POST",
@@ -24,7 +23,6 @@ async function onTurnstileSuccess(token: string) {
 		body: JSON.stringify({
 			token,
 			chatId,
-			messageId,
 		}),
 	});
 
