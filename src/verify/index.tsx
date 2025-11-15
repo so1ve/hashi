@@ -29,11 +29,38 @@ async function onTurnstileSuccess(token: string) {
 	}, 2500);
 }
 
+const style = `
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+html,
+body {
+	height: 100%;
+	width: 100%;
+}
+
+body {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	background-color: #f5f5f5;
+}
+
+.cf-turnstile {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+}
+`;
+
 export const VerifyPage = ({ siteKey: siteId }: Props) => (
 	<html>
 		<head>
 			<link rel="preconnect" href="https://challenges.cloudflare.com" />
-			<link href="/src/verify/style.css" rel="stylesheet" />
+			<style>{style}</style>
 			<script
 				src="https://challenges.cloudflare.com/turnstile/v0/api.js"
 				async
