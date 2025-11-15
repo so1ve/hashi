@@ -23,8 +23,6 @@ await bot.api.setMyCommands([
 	{ command: "start", description: "Start the bot" },
 ]);
 
-const topicCreationRequests = new Map<number, AbortController>();
-
 async function topicExists(ctx: Context, topicId: number) {
 	try {
 		await ctx.api.reopenForumTopic(env.GROUP_ID, topicId);
@@ -38,6 +36,8 @@ async function topicExists(ctx: Context, topicId: number) {
 		return false;
 	}
 }
+
+const topicCreationRequests = new Map<number, AbortController>();
 
 async function ensureTopic(ctx: Context, privateChatId: number) {
 	const topicId = await kv.topicIdFromPrivateChatId.get(privateChatId);
@@ -117,9 +117,9 @@ bot.command("block").filter(
 
 			return;
 		}
-
 		const blocked = param === "true";
-		await kv.blockedUsers.set(privateChatId, blocked);
+		const user = (await kv.blockedUsers.get(privateChatId)) ?? {};
+		await kv.blockedUsers.set(privateChatId, { ...user, blocked });
 		const combined = fmt`This user has been ${b}${blocked ? "blocked" : "unblocked"}${b}.`;
 		await ctx.reply(combined.text, {
 			entities: combined.entities,
@@ -130,8 +130,8 @@ bot.command("block").filter(
 bot.on("message").filter(
 	async (ctx) => ctx.chat.type === "private",
 	async (ctx) => {
-		const isBlocked = await kv.blockedUsers.get(ctx.from.id);
-		if (isBlocked) {
+		const user = await kv.blockedUsers.get(ctx.from.id);
+		if (user?.blocked) {
 			await ctx.reply("You are blocked from using this bot.");
 
 			return;
@@ -147,7 +147,6 @@ bot.on("message").filter(
 	},
 );
 
-// Handle messages in group topics - forward back to private chat
 bot.on("message:is_topic_message").filter(
 	async (ctx) =>
 		!ctx.from.is_bot && ctx.chat.id === Number.parseInt(env.GROUP_ID),
