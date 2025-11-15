@@ -118,8 +118,9 @@ bot.command("block").filter(
 			return;
 		}
 
-		await kv.blockedUsers.set(privateChatId, param === "true");
-		const combined = fmt`This user has been ${b}${param === "true" ? "blocked" : "unblocked"}${b}.`;
+		const blocked = param === "true";
+		await kv.blockedUsers.set(privateChatId, blocked);
+		const combined = fmt`This user has been ${b}${blocked ? "blocked" : "unblocked"}${b}.`;
 		await ctx.reply(combined.text, {
 			entities: combined.entities,
 		});
