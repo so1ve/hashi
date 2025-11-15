@@ -1,5 +1,3 @@
-import { Link, Script, ViteClient } from "vite-ssr-components/hono";
-
 interface Props {
 	siteKey: string;
 }
@@ -34,15 +32,14 @@ async function onTurnstileSuccess(token: string) {
 export const VerifyPage = ({ siteKey: siteId }: Props) => (
 	<html>
 		<head>
-			<ViteClient />
-			<Link rel="preconnect" href="https://challenges.cloudflare.com" />
-			<Link href="/src/verify/style.css" rel="stylesheet" />
-			<Script
+			<link rel="preconnect" href="https://challenges.cloudflare.com" />
+			<link href="/src/verify/style.css" rel="stylesheet" />
+			<script
 				src="https://challenges.cloudflare.com/turnstile/v0/api.js"
 				async
 				defer
 			/>
-			<Script src="https://telegram.org/js/telegram-web-app.js"></Script>
+			<script src="https://telegram.org/js/telegram-web-app.js" />
 		</head>
 		<body>
 			<div
