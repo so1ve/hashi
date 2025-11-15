@@ -52,3 +52,4 @@ export const users = createCachedKv<number, User>(
 	blockedUsersCache,
 	(key) => `user:${key}`,
 );
+export { settings } from "./settings";

@@ -1,7 +1,7 @@
 import { Menu, MenuRange } from "@grammyjs/menu";
 import { env } from "cloudflare:workers";
 
-import { settings } from "../kv/settings";
+import * as kv from "../kv";
 import type { HashiBot, HashiContext } from ".";
 
 const textItems = ["welcome", "messageSent"] as const;
@@ -16,7 +16,7 @@ export function registerSettings(bot: HashiBot) {
 	const text = new Menu<HashiContext>("settings_text")
 		.dynamic(async (_ctx) => {
 			const range = new MenuRange<HashiContext>();
-			const currentSettings = await settings.get();
+			const currentSettings = await kv.settings.get();
 
 			for (const item of textItems) {
 				const currentValue = currentSettings?.text?.[item];
@@ -42,13 +42,13 @@ export function registerSettings(bot: HashiBot) {
 	const features = new Menu<HashiContext>("settings_features")
 		.dynamic(async (_ctx) => {
 			const range = new MenuRange<HashiContext>();
-			const currentSettings = await settings.get();
+			const currentSettings = await kv.settings.get();
 
 			const messageSentEnabled = currentSettings.messageSentNotification;
 			const statusIcon = messageSentEnabled ? "✅" : "❌";
 
 			range.text(`${statusIcon} Message Sent Notification`, async (ctx) => {
-				await settings.update({
+				await kv.settings.update({
 					messageSentNotification: !messageSentEnabled,
 				});
 
@@ -96,7 +96,7 @@ export function registerSettings(bot: HashiBot) {
 				return;
 			}
 
-			await settings.update({
+			await kv.settings.update({
 				text: {
 					[settingKey]: text,
 				},

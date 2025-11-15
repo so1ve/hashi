@@ -22,6 +22,16 @@ export function registerForwarder(
 			}
 
 			await ctx.message.copy(env.GROUP_ID, { message_thread_id: topicId });
+
+			const settings = await kv.settings.get();
+			if (settings.messageSentNotification) {
+				const _message = await ctx.reply(settings.text.messageSent);
+
+				// TODO: Re-enable deletion after fixing setTimeout not working issue
+				// setTimeout(async () => {
+				// 	await ctx.api.deleteMessage(ctx.chat.id, message.message_id);
+				// }, 5000);
+			}
 		},
 	);
 
