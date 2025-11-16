@@ -35,11 +35,9 @@ export const initialize = createMiddleware(async (c, next) => {
 		initialized = true;
 
 		const { hostname } = new URL(c.req.url);
-		await bot.api.setWebhook(`https://${hostname}/webhook`);
-
-		await initializeTables();
 		await initializeBot(hostname);
-
+		await bot.api.setWebhook(`https://${hostname}/webhook`);
+		await initializeTables();
 		await checkPermissions();
 	}
 

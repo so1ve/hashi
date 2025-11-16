@@ -19,23 +19,25 @@ interface SessionData {
 }
 
 export type HashiContext = HydrateFlavor<Context & SessionFlavor<SessionData>>;
-// don't check env existence here because we have `env-checker` middleware
-export const bot = new Bot<HashiContext>(env.BOT_TOKEN);
+// Declare bot but don't initialize it yet.
+// The bot will be initialized in `initializeBot()`
+export let bot: Bot<HashiContext>;
 export type HashiBot = typeof bot;
 
-bot.use(hydrate());
-bot.use(
-	session<SessionData, HashiContext>({
-		initial: () => ({ awaitingTextSetting: null }),
-	}),
-);
-
-const initialized = false;
-
 export async function initializeBot(hostname: string) {
-	if (initialized) {
+	if (bot) {
 		return;
 	}
+
+	// don't check env existence here because we have `checker` middleware
+	bot = new Bot<HashiContext>(env.BOT_TOKEN);
+
+	bot.use(hydrate());
+	bot.use(
+		session<SessionData, HashiContext>({
+			initial: () => ({ awaitingTextSetting: null }),
+		}),
+	);
 
 	await bot.api.setMyCommands([
 		{ command: "start", description: "Start the bot" },
