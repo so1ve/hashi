@@ -15,6 +15,9 @@ importers:
       '@cloudflare/vite-plugin':
         specifier: ^1.2.3
         version: 1.14.2(vite@7.2.2(@types/node@24.10.1)(jiti@2.6.1)(yaml@2.8.1))(workerd@1.20251109.0)(wrangler@4.48.0(@cloudflare/workers-types@4.20251115.0))
+      '@grammyjs/auto-retry':
+        specifier: ^2.0.2
+        version: 2.0.2(grammy@1.38.3)
       '@grammyjs/hydrate':
         specifier: ^1.6.0
         version: 1.6.0(grammy@1.38.3)
@@ -508,6 +511,12 @@ packages:
   '@eslint/plugin-kit@0.4.1':
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@grammyjs/auto-retry@2.0.2':
+    resolution: {integrity: sha512-b4A4p5jlYDiQtW0c0FXYe11WMkYoiW+5rvOaDMCOk1h7Pu2SDl7B7gmFF8cthWCx2+M2nWLOsBxAgbBG4kKWYg==}
+    engines: {node: '>=12.20.0 || >=14.13.1'}
+    peerDependencies:
+      grammy: ^1.10.0
 
   '@grammyjs/hydrate@1.6.0':
     resolution: {integrity: sha512-dpszYCuzrYhhSJNjwV+zhG9SpwfFkO6nk+IHa56cd8ZCLO//aVVHOO5vKeobq4chhDu+MYjn7KaQMp0sn4Lb/g==}
@@ -3334,6 +3343,13 @@ snapshots:
     dependencies:
       '@eslint/core': 0.17.0
       levn: 0.4.1
+
+  '@grammyjs/auto-retry@2.0.2(grammy@1.38.3)':
+    dependencies:
+      debug: 4.4.3
+      grammy: 1.38.3
+    transitivePeerDependencies:
+      - supports-color
 
   '@grammyjs/hydrate@1.6.0(grammy@1.38.3)':
     dependencies:

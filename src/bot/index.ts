@@ -1,3 +1,4 @@
+import { autoRetry } from "@grammyjs/auto-retry";
 import type { HydrateFlavor } from "@grammyjs/hydrate";
 import { hydrate } from "@grammyjs/hydrate";
 import { Menu, MenuRange } from "@grammyjs/menu";
@@ -33,6 +34,7 @@ export async function initializeBot(hostname: string) {
 	// don't check env existence here because we have `checker` middleware
 	bot = new Bot<HashiContext>(env.BOT_TOKEN);
 
+	bot.api.config.use(autoRetry({ maxRetryAttempts: 3 }));
 	bot.use(hydrate());
 	bot.use(
 		session<SessionData, HashiContext>({
