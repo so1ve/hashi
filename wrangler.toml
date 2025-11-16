@@ -9,4 +9,3 @@ enabled = true
 [[d1_databases]]
 binding = "DB"
 database_name = "DB"
-database_id = "172ef942-d1ff-4f38-9394-17203f2fdd61"
