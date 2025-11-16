@@ -21,6 +21,7 @@ interface SessionData {
 export type HashiContext = HydrateFlavor<Context & SessionFlavor<SessionData>>;
 // Declare bot but don't initialize it yet.
 // The bot will be initialized in `initializeBot()`
+// eslint-disable-next-line import/no-mutable-exports
 export let bot: Bot<HashiContext>;
 export type HashiBot = typeof bot;
 
