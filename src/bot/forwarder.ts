@@ -28,7 +28,9 @@ export function registerForwarder(
 			);
 			const messageSentText = await getText("messageSent");
 			if (messageSentNotificationEnabled) {
-				const message = await ctx.reply(messageSentText);
+				const message = await ctx.reply(messageSentText, {
+					disable_notification: true,
+				});
 				await sleep(3000);
 				await ctx.api.deleteMessage(ctx.chat.id, message.message_id);
 			}
