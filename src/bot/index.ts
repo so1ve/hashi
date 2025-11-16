@@ -40,6 +40,7 @@ export async function initializeBot(hostname: string) {
 	await bot.api.setMyCommands([
 		{ command: "start", description: "Start the bot" },
 		{ command: "block", description: "Block user" },
+		{ command: "unblock", description: "Unblock user" },
 		{ command: "settings", description: "Configure your settings" },
 	]);
 
