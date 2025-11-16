@@ -20,4 +20,8 @@ export const expectedTables = {
 		key: "TEXT PRIMARY KEY" as Marker<TextsKey>,
 		value: "TEXT" as Marker<string>,
 	},
+	system: {
+		key: "TEXT PRIMARY KEY" as Marker<string>,
+		value: "TEXT" as Marker<string>,
+	},
 } satisfies Table;

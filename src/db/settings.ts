@@ -1,4 +1,4 @@
-import type { SettingsKey, TextsKey } from "../settings";
+import type { SettingsKey, SystemKey, TextsKey } from "../settings";
 import type { Settings, SqliteBoolean, Texts } from "../types";
 import { toSqliteBoolean } from "../utils";
 import { db } from ".";
@@ -40,4 +40,13 @@ export async function getText(key: TextsKey) {
 }
 export async function setText(key: TextsKey, value: string) {
 	await db.update("texts", { key, value }, { key });
+}
+
+export async function getSystemValue(key: SystemKey): Promise<string | null> {
+	const result = await db.select("system", null, { key });
+
+	return result[0]?.value ?? null;
+}
+export async function setSystemValue(key: SystemKey, value: string) {
+	await db.insert("system", { key, value }, { or: "REPLACE" });
 }

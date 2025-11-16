@@ -1,7 +1,7 @@
 import type { AbortController } from "abort-controller";
 import { env } from "cloudflare:workers";
 
-import { db } from "../db";
+import { db, getSystemValue, setSystemValue } from "../db";
 import { Aborted, avoidReductantCalls } from "../utils";
 import type { HashiContext } from ".";
 
@@ -20,6 +20,23 @@ async function topicExists(ctx: HashiContext, topicId: number) {
 }
 
 const topicCreationRequests = new Map<number, AbortController>();
+
+function getUserInfo(ctx: HashiContext) {
+	const chat = ctx.chat!;
+	const chatId = ctx.chatId!;
+
+	const name = getReadableUserName(ctx);
+	const username = chat.username ? `@${chat.username}` : "N/A";
+	const userLink = `tg://user?id=${chatId}`;
+
+	const formattedInfo = [
+		`Name: ${name}`,
+		`Username: ${username}`,
+		`ID: [${chatId}](${userLink})`,
+	].join("\n");
+
+	return formattedInfo;
+}
 
 function getReadableUserName(ctx: HashiContext) {
 	// Must be called within a context where ctx.chat is defined, like user private chats
@@ -41,24 +58,87 @@ function getReadableUserName(ctx: HashiContext) {
 }
 
 async function sendUserInfo(ctx: HashiContext, topicId: number) {
-	const chat = ctx.chat!;
-	const chatId = ctx.chatId!;
+	const userInfo = getUserInfo(ctx);
 
-	const name = getReadableUserName(ctx);
-	const username = chat.username ? `@${chat.username}` : "N/A";
-	const userLink = `tg://user?id=${chatId}`;
-
-	const formattedInfo = [
-		`Name: ${name}`,
-		`Username: ${username}`,
-		`ID: [${chatId}](${userLink})`,
-	].join("\n");
-
-	await ctx.api.sendMessage(env.GROUP_ID, formattedInfo, {
+	await ctx.api.sendMessage(env.GROUP_ID, userInfo, {
 		message_thread_id: topicId,
 		disable_notification: true,
 		parse_mode: "Markdown",
 	});
+}
+
+async function sendNotificationMessage(
+	ctx: HashiContext,
+	notificationsTopicId: number,
+	userTopicId: number,
+) {
+	const userInfo = getUserInfo(ctx);
+	const topicLink = `https://t.me/c/${env.GROUP_ID.replace("-100", "")}/${userTopicId}`;
+
+	await ctx.api.sendMessage(
+		env.GROUP_ID,
+		`New user started a chat!\n\n${userInfo}`,
+		{
+			message_thread_id: notificationsTopicId,
+			disable_notification: false,
+			parse_mode: "Markdown",
+			reply_markup: {
+				inline_keyboard: [
+					[
+						{
+							text: "Chat",
+							url: topicLink,
+						},
+					],
+				],
+			},
+		},
+	);
+}
+
+const notificationsTopicCreationRequest = new Map<string, AbortController>();
+
+export async function ensureNotificationsTopic(
+	ctx: HashiContext,
+): Promise<number | typeof Aborted> {
+	const storedTopicId = await getSystemValue("notifications_topic");
+
+	if (storedTopicId) {
+		const topicId = Number.parseInt(storedTopicId);
+		if (await topicExists(ctx, topicId)) {
+			return topicId;
+		}
+	}
+
+	const result = await avoidReductantCalls(
+		notificationsTopicCreationRequest,
+		"notifications_topic",
+		async (signal) => {
+			const topic = await ctx.api.createForumTopic(
+				env.GROUP_ID,
+				"Notifications",
+				undefined,
+				signal,
+			);
+
+			await ctx.api.sendMessage(
+				env.GROUP_ID,
+				"This topic will receive notifications when new users start a chat.",
+				{
+					message_thread_id: topic.message_thread_id,
+					disable_notification: true,
+				},
+			);
+
+			return topic.message_thread_id;
+		},
+	);
+
+	if (result !== Aborted) {
+		await setSystemValue("notifications_topic", result.toString());
+	}
+
+	return result;
 }
 
 export async function ensureTopic(ctx: HashiContext, privateChatId: number) {
@@ -84,9 +164,17 @@ export async function ensureTopic(ctx: HashiContext, privateChatId: number) {
 				signal,
 			);
 
-			await sendUserInfo(ctx, topic.message_thread_id);
+			const topicId = topic.message_thread_id;
 
-			return topic.message_thread_id;
+			await sendUserInfo(ctx, topicId);
+
+			// Send notification to the Notifications topic
+			const notificationsTopicId = await ensureNotificationsTopic(ctx);
+			if (notificationsTopicId !== Aborted) {
+				await sendNotificationMessage(ctx, notificationsTopicId, topicId);
+			}
+
+			return topicId;
 		},
 	);
 

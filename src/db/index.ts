@@ -8,3 +8,4 @@ const { DB } = env;
 export const db = new D1Wrapper<typeof expectedTables>(DB);
 
 export * from "./settings";
+export * from "./users";

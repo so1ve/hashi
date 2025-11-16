@@ -19,3 +19,6 @@ export const textItemLabels = {
 	welcome: "Welcome Message",
 	messageSent: "Message Sent Confirmation",
 } satisfies Record<TextsKey, string>;
+
+export const systemKeys = ["notifications_topic"] as const;
+export type SystemKey = (typeof systemKeys)[number];
