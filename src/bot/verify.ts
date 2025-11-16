@@ -1,4 +1,5 @@
 import type { Menu } from "@grammyjs/menu";
+import { env } from "cloudflare:workers";
 
 import { db } from "../db";
 import type { HashiContext } from ".";
@@ -56,4 +57,9 @@ export async function verifySuccess(chatId: number) {
 		chatId,
 		"Verification successful! You can now use the bot.",
 	);
+
+	const mapping = (await db.select("chatTopicMappings", null, { chatId }))[0];
+	await bot.api.sendMessage(env.GROUP_ID, "User passed verification.", {
+		message_thread_id: mapping.topicId,
+	});
 }
