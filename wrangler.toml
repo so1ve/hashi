@@ -1,4 +1,4 @@
-name = "hashi"
+name = "hashi-test"
 compatibility_date = "2025-08-03"
 main = "./src/index.tsx"
 compatibility_flags = ["nodejs_compat"]
