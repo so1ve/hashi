@@ -1,6 +1,8 @@
 import type { AbortSignal } from "abort-controller";
 import { AbortController } from "abort-controller";
 
+import type { SqliteBoolean } from "./types";
+
 export const Aborted = Symbol("Aborted");
 
 export async function avoidReductantCalls<T, R>(
@@ -34,3 +36,6 @@ export async function avoidReductantCalls<T, R>(
 
 export const sleep = (ms: number): Promise<void> =>
 	new Promise((resolve) => setTimeout(resolve, ms));
+export const toSqliteBoolean = (
+	value: boolean | SqliteBoolean,
+): SqliteBoolean => (value ? 1 : 0);

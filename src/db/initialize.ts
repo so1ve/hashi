@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
 
+import type { SettingsKey, TextsKey } from "../settings";
 import { defaultSettings, defaultTexts } from "../settings";
-import type { SettingsKey, TableStructure, TextsKey } from "../types";
+import type { TableStructure } from "../types";
 import { expectedTables } from "./table";
 import { db } from ".";
 

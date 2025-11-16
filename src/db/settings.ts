@@ -1,38 +1,37 @@
-import type { SettingsKey, TextsKey } from "../types";
+import type { SettingsKey, TextsKey } from "../settings";
+import type { Settings, SqliteBoolean, Texts } from "../types";
+import { toSqliteBoolean } from "../utils";
 import { db } from ".";
 
 export async function getSettings() {
 	const settingsRows = await db.select("settings");
 
-	return settingsRows.reduce(
-		(acc, row) => {
-			acc[row.key] = Boolean(row.value);
+	return settingsRows.reduce((acc, row) => {
+		acc[row.key] = row.value;
 
-			return acc;
-		},
-		{} as Record<SettingsKey, boolean>,
-	);
+		return acc;
+	}, {} as Settings);
 }
 export async function getSetting(key: SettingsKey) {
 	const result = await db.select("settings", null, { key });
 
 	return result[0].value;
 }
-export async function setSetting(key: SettingsKey, value: boolean) {
-	await db.update("settings", { key, value: value ? 1 : 0 }, { key });
+export async function setSetting(
+	key: SettingsKey,
+	value: boolean | SqliteBoolean,
+) {
+	await db.update("settings", { key, value: toSqliteBoolean(value) }, { key });
 }
 
 export async function getTexts() {
 	const textsRows = await db.select("texts");
 
-	return textsRows.reduce(
-		(acc, row) => {
-			acc[row.key] = row.value;
+	return textsRows.reduce((acc, row) => {
+		acc[row.key] = row.value;
 
-			return acc;
-		},
-		{} as Record<TextsKey, string>,
-	);
+		return acc;
+	}, {} as Texts);
 }
 export async function getText(key: TextsKey) {
 	const result = await db.select("texts", null, { key });

@@ -5,16 +5,8 @@ export interface User {
 	verificationMessageId: number | null;
 }
 
-export interface Settings {
-	messageSentNotification: SqliteBoolean;
-}
-export type SettingsKey = keyof Settings;
-
-export interface Texts {
-	welcome: string;
-	messageSent: string;
-}
-export type TextsKey = keyof Texts;
+export type Settings = Record<string, SqliteBoolean>;
+export type Texts = Record<string, string>;
 
 export interface Env {
 	Bindings: CloudflareBindings;

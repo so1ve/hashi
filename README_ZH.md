@@ -7,7 +7,7 @@
 ## 功能
 
 - 支持文本、图片等多种消息类型的双向通信
-- 基于 Cloudflare Turnstile 实现人机验证
+- 可选的基于 Cloudflare Turnstile 的人机验证
 
 ## 部署
 
@@ -23,9 +23,9 @@
 2. 添加机器人为管理员，建议权限全给（消息管理，话题管理）
 3. 通过 `@getidsbot` 获取群组 ID （拉进群聊），记住获取到的 `GROUP_ID`。
 
-### 获取 Cloudflare Turnstile 密钥
+### （可选）获取 Cloudflare Turnstile 密钥
 
-访问 [Cloudflare Dashboard](https://dash.cloudflare.com/?to=/:account/turnstile)，创建一个小组件，主机名可以先随便填。获取 `SITE_KEY` 和 `SECRET_KEY` 并记住。
+访问 [Cloudflare Dashboard](https://dash.cloudflare.com/?to=/:account/turnstile)，创建一个小组件，主机名可以先随便填。获取 `TURNSTILE_SITE_KEY` 和 `TURNSTILE_SECRET_KEY` 并记住。
 
 ### 部署到 Cloudflare Workers
 
@@ -39,8 +39,8 @@
 4. 点击 `设置`，在 `变量与机密` 处中添加以下环境变量：
    - `BOT_TOKEN`：在 BotFather 获取的机器人令牌
    - `GROUP_ID`：在后台群组获取的群组ID
-   - `TURNSTILE_SITE_KEY`：Cloudflare Turnstile 的 Site Key
-   - `TURNSTILE_SECRET_KEY`：Cloudflare Turnstile 的 Secret Key
+   - （可选）`TURNSTILE_SITE_KEY`：Cloudflare Turnstile 的 Site Key
+   - （可选）`TURNSTILE_SECRET_KEY`：Cloudflare Turnstile 的 Secret Key
 5. 点击 `保存并部署`，等待部署完成。
 
 部署完成后，回到 `概述` 页面，复制 `域和路由` 处的域名，并回到 Turnstil e 仪表盘，将域名添加到你创建的小组件的 `主机名` 列表中。
@@ -63,6 +63,10 @@
 
 - `/block`：禁止当前用户的双向聊天。
 - `/unblock`：解除对当前用户的禁止。
+
+### 人机验证
+
+你可以在设置中开启或关闭人机验证功能。如果开启，用户在开始与机器人通信前需要完成验证；如果关闭，用户可以直接与机器人通信。开启人机验证需要在部署时提供 `TURNSTILE_SITE_KEY` 和 `TURNSTILE_SECRET_KEY`。
 
 ## 致谢
 

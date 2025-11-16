@@ -1,10 +1,5 @@
-import type {
-	Marker,
-	SettingsKey,
-	SqliteBoolean,
-	Table,
-	TextsKey,
-} from "../types";
+import type { SettingsKey, TextsKey } from "../settings";
+import type { Marker, SqliteBoolean, Table } from "../types";
 
 export const expectedTables = {
 	users: {

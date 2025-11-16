@@ -4,6 +4,7 @@ import { env } from "cloudflare:workers";
 import type { Middleware } from "grammy";
 
 import { db } from "../db";
+import { toSqliteBoolean } from "../utils";
 import type { HashiBot } from ".";
 
 const createBlockHandler = (blocked: boolean) =>
@@ -37,7 +38,7 @@ const createBlockHandler = (blocked: boolean) =>
 
 		await db.update(
 			"users",
-			{ blocked: blocked ? 1 : 0 },
+			{ blocked: toSqliteBoolean(blocked) },
 			{ chatId: privateChatId },
 		);
 		const combined = fmt`This user has been ${b}${blocked ? "blocked" : "unblocked"}${b}.`;

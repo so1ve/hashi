@@ -6,7 +6,7 @@ import type { Context, SessionFlavor } from "grammy";
 import { Bot, session } from "grammy";
 
 import { getText } from "../db";
-import type { TextsKey } from "../types";
+import type { TextsKey } from "../settings";
 import { registerBlockCommand } from "./block";
 import { registerBotBlockedNotifier } from "./bot-blocked-notifier";
 import { registerForwarder } from "./forwarder";

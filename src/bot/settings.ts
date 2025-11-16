@@ -2,16 +2,17 @@ import { Menu, MenuRange } from "@grammyjs/menu";
 import { env } from "cloudflare:workers";
 
 import { getSettings, getTexts, setSetting, setText } from "../db";
-import { defaultTexts } from "../settings";
-import type { TextsKey } from "../types";
+import type { SettingsKey, TextsKey } from "../settings";
+import {
+	defaultSettings,
+	defaultTexts,
+	settingItemLabels,
+	textItemLabels,
+} from "../settings";
 import type { HashiBot, HashiContext } from ".";
 
+const settingKeys = Object.keys(defaultSettings) as SettingsKey[];
 const textKeys = Object.keys(defaultTexts) as TextsKey[];
-
-const textItemLabels = {
-	welcome: "Welcome Message",
-	messageSent: "Message Sent Confirmation",
-} satisfies Record<TextsKey, string>;
 
 export function registerSettings(bot: HashiBot) {
 	const text = new Menu<HashiContext>("settings_text")
@@ -47,20 +48,21 @@ export function registerSettings(bot: HashiBot) {
 			const range = new MenuRange<HashiContext>();
 			const settings = await getSettings();
 
-			const messageSentEnabled = settings.messageSentNotification;
-			const statusIcon = messageSentEnabled ? "✅" : "❌";
+			for (const item of settingKeys) {
+				const enabled = settings[item];
+				const statusIcon = enabled ? "✅" : "❌";
+				const label = settingItemLabels[item];
 
-			range.text(`${statusIcon} Message Sent Notification`, async (ctx) => {
-				await setSetting("messageSentNotification", !messageSentEnabled);
+				range.text(`${statusIcon} ${label}`, async (ctx) => {
+					await setSetting(item, !enabled);
 
-				await ctx.answerCallbackQuery(
-					messageSentEnabled
-						? "Message Sent Notification disabled"
-						: "Message Sent Notification enabled",
-				);
-				ctx.menu.update();
-			});
-			range.row();
+					await ctx.answerCallbackQuery(
+						enabled ? `${label} disabled` : `${label} enabled`,
+					);
+					ctx.menu.update();
+				});
+				range.row();
+			}
 
 			return range;
 		})

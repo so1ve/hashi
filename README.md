@@ -7,7 +7,7 @@ English | [简体中文](./README_ZH.md)
 ## Features
 
 - Supports two-way communication for various message types including text, images, and more
-- Human verification based on Cloudflare Turnstile
+- (Optional) human verification based on Cloudflare Turnstile
 
 ## Deployment
 
@@ -23,9 +23,9 @@ English | [简体中文](./README_ZH.md)
 2. Add the bot as an administrator. It's recommended to grant all permissions (message management, topic management).
 3. Use `@getidsbot` to get the group ID (add it to the group chat), and remember the `GROUP_ID` you receive.
 
-### Get Cloudflare Turnstile Keys
+### (Optional) Get Cloudflare Turnstile Keys
 
-Visit [Cloudflare Dashboard](https://dash.cloudflare.com/?to=/:account/turnstile), create a widget, and you can fill in any hostname for now. Get and remember the `SITE_KEY` and `SECRET_KEY`.
+Visit [Cloudflare Dashboard](https://dash.cloudflare.com/?to=/:account/turnstile), create a widget, and you can fill in any hostname for now. Get and remember the `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`.
 
 ### Deploy to Cloudflare Workers
 
@@ -39,8 +39,8 @@ First, fork this repository to your GitHub account. Then click the button below 
 4. Click `Settings`, and add the following environment variables in `Variables and Secrets`:
    - `BOT_TOKEN`: The bot token obtained from BotFather
    - `GROUP_ID`: The group ID obtained from the backend group
-   - `TURNSTILE_SITE_KEY`: Cloudflare Turnstile Site Key
-   - `TURNSTILE_SECRET_KEY`: Cloudflare Turnstile Secret Key
+   - (Optional) `TURNSTILE_SITE_KEY`: Cloudflare Turnstile Site Key
+   - (Optional) `TURNSTILE_SECRET_KEY`: Cloudflare Turnstile Secret Key
 5. Click `Save and Deploy`, and wait for the deployment to complete.
 
 After deployment is complete, go back to the `Overview` page, copy the domain from `Domains & Routes`, and return to the Turnstile dashboard to add the domain to the `Hostnames` list of the widget you created.
@@ -63,6 +63,10 @@ In the topic where you're conversing with a user, you can use the following comm
 
 - `/block`: Block bidirectional chat with the current user.
 - `/unblock`: Unblock the current user.
+
+### Human Verification
+
+You can enable or disable the human verification feature in the settings. If enabled, users need to complete verification before starting communication with the bot; if disabled, users can communicate directly with the bot. Enabling human verification requires providing `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` during deployment.
 
 ## Credits
 
