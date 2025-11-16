@@ -27,11 +27,11 @@ export async function getTexts() {
 
 	return textsRows.reduce(
 		(acc, row) => {
-			acc[row.key] = Boolean(row.value);
+			acc[row.key] = row.value;
 
 			return acc;
 		},
-		{} as Record<TextsKey, boolean>,
+		{} as Record<TextsKey, string>,
 	);
 }
 export async function getText(key: TextsKey) {
