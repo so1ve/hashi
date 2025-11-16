@@ -21,7 +21,7 @@ async function topicExists(ctx: HashiContext, topicId: number) {
 
 const topicCreationRequests = new Map<number, AbortController>();
 
-function getTopicName(ctx: HashiContext) {
+function getReadableUserName(ctx: HashiContext) {
 	// Must be called within a context where ctx.chat is defined, like user private chats
 	const chat = ctx.chat!;
 
@@ -40,6 +40,27 @@ function getTopicName(ctx: HashiContext) {
 	return `User ${ctx.chatId}`;
 }
 
+async function sendUserInfo(ctx: HashiContext, topicId: number) {
+	const chat = ctx.chat!;
+	const chatId = ctx.chatId!;
+
+	const name = getReadableUserName(ctx);
+	const username = chat.username ? `@${chat.username}` : "N/A";
+	const userLink = `tg://user?id=${chatId}`;
+
+	const formattedInfo = [
+		`Name: ${name}`,
+		`Username: ${username}`,
+		`ID: [${chatId}](${userLink})`,
+	].join("\n");
+
+	await ctx.api.sendMessage(env.GROUP_ID, formattedInfo, {
+		message_thread_id: topicId,
+		disable_notification: true,
+		parse_mode: "Markdown",
+	});
+}
+
 export async function ensureTopic(ctx: HashiContext, privateChatId: number) {
 	const mapping = (
 		await db.select("chatTopicMappings", null, {
@@ -50,7 +71,7 @@ export async function ensureTopic(ctx: HashiContext, privateChatId: number) {
 		return mapping.topicId;
 	}
 
-	const title = getTopicName(ctx);
+	const title = getReadableUserName(ctx);
 
 	const result = await avoidReductantCalls(
 		topicCreationRequests,
@@ -62,6 +83,8 @@ export async function ensureTopic(ctx: HashiContext, privateChatId: number) {
 				undefined,
 				signal,
 			);
+
+			await sendUserInfo(ctx, topic.message_thread_id);
 
 			return topic.message_thread_id;
 		},
