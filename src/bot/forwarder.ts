@@ -1,8 +1,8 @@
 import type { Menu } from "@grammyjs/menu";
 import { env } from "cloudflare:workers";
 
-import { db, getSetting, getText } from "../db";
-import { Aborted, sleep } from "../utils";
+import { db } from "../db";
+import { Aborted } from "../utils";
 import { guard } from "./guard";
 import { ensureTopic } from "./utils";
 import type { HashiBot, HashiContext } from ".";
@@ -23,17 +23,17 @@ export function registerForwarder(
 
 			await ctx.message.copy(env.GROUP_ID, { message_thread_id: topicId });
 
-			const messageSentNotificationEnabled = await getSetting(
-				"messageSentNotification",
-			);
-			const messageSentText = await getText("messageSent");
-			if (messageSentNotificationEnabled) {
-				const message = await ctx.reply(messageSentText, {
-					disable_notification: true,
-				});
-				await sleep(3000);
-				await ctx.api.deleteMessage(ctx.chat.id, message.message_id);
-			}
+			// const messageSentNotificationEnabled = await getSetting(
+			// 	"messageSentNotification",
+			// );
+			// const messageSentText = await getText("messageSent");
+			// if (messageSentNotificationEnabled) {
+			// 	const message = await ctx.reply(messageSentText, {
+			// 		disable_notification: true,
+			// 	});
+			// 	await sleep(3000);
+			// 	await ctx.api.deleteMessage(ctx.chat.id, message.message_id);
+			// }
 		},
 	);
 
