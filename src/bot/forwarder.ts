@@ -2,7 +2,7 @@ import type { Menu } from "@grammyjs/menu";
 import { env } from "cloudflare:workers";
 
 import { db, getSetting, getText } from "../db";
-import { Aborted } from "../utils";
+import { Aborted, sleep } from "../utils";
 import { guard } from "./guard";
 import { ensureTopic } from "./utils";
 import type { HashiBot, HashiContext } from ".";
@@ -28,12 +28,9 @@ export function registerForwarder(
 			);
 			const messageSentText = await getText("messageSent");
 			if (messageSentNotificationEnabled) {
-				const _message = await ctx.reply(messageSentText);
-
-				// TODO: Re-enable deletion after fixing setTimeout not working issue
-				// setTimeout(async () => {
-				// 	await ctx.api.deleteMessage(ctx.chat.id, message.message_id);
-				// }, 5000);
+				const message = await ctx.reply(messageSentText);
+				await sleep(3000);
+				await ctx.api.deleteMessage(ctx.chat.id, message.message_id);
 			}
 		},
 	);
