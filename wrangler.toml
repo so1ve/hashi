@@ -6,6 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 [observability]
 enabled = true
 
-[[kv_namespaces]]
-binding = "KV"
-id = "4a5e3ea04a3f48188a5b67b7dbf14b9c"
+[[d1_databases]]
+binding = "DB"
+database_name = "DB"
+database_id = "172ef942-d1ff-4f38-9394-17203f2fdd61"

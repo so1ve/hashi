@@ -3,7 +3,7 @@ import { addReplyParam } from "@roziscoding/grammy-autoquote";
 import { env } from "cloudflare:workers";
 import type { Middleware } from "grammy";
 
-import * as kv from "../kv";
+import { db } from "../db";
 import type { HashiBot } from ".";
 
 const createBlockHandler = (blocked: boolean) =>
@@ -23,7 +23,11 @@ const createBlockHandler = (blocked: boolean) =>
 		}
 
 		const topicId = ctx.message.message_thread_id;
-		const privateChatId = await kv.privateChatIdFromTopicId.get(topicId);
+		const privateChatId = (
+			await db.select("chatTopicMappings", null, {
+				topicId,
+			})
+		)[0].chatId;
 
 		if (!privateChatId) {
 			await ctx.reply("Could not find the private chat ID for this topic.");
@@ -31,9 +35,11 @@ const createBlockHandler = (blocked: boolean) =>
 			return;
 		}
 
-		const user = (await kv.users.get(privateChatId)) ?? {};
-
-		await kv.users.set(privateChatId, { ...user, blocked });
+		await db.update(
+			"users",
+			{ blocked: blocked ? 1 : 0 },
+			{ chatId: privateChatId },
+		);
 		const combined = fmt`This user has been ${b}${blocked ? "blocked" : "unblocked"}${b}.`;
 		await ctx.reply(combined.text, {
 			entities: combined.entities,

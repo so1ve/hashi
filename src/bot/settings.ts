@@ -1,25 +1,26 @@
 import { Menu, MenuRange } from "@grammyjs/menu";
 import { env } from "cloudflare:workers";
 
-import * as kv from "../kv";
+import { getSettings, getTexts, setSetting, setText } from "../db";
+import { defaultTexts } from "../settings";
+import type { TextsKey } from "../types";
 import type { HashiBot, HashiContext } from ".";
 
-const textItems = ["welcome", "messageSent"] as const;
-type TextItem = (typeof textItems)[number];
+const textKeys = Object.keys(defaultTexts) as TextsKey[];
 
-const textItemLabels: Record<TextItem, string> = {
+const textItemLabels = {
 	welcome: "Welcome Message",
 	messageSent: "Message Sent Confirmation",
-};
+} satisfies Record<TextsKey, string>;
 
 export function registerSettings(bot: HashiBot) {
 	const text = new Menu<HashiContext>("settings_text")
 		.dynamic(async (_ctx) => {
 			const range = new MenuRange<HashiContext>();
-			const currentSettings = await kv.settings.get();
+			const texts = await getTexts();
 
-			for (const item of textItems) {
-				const currentValue = currentSettings?.text?.[item];
+			for (const item of textKeys) {
+				const currentValue = texts[item];
 				const label = textItemLabels[item];
 				const buttonText = currentValue ? `✏️ ${label}` : `➕ ${label}`;
 
@@ -42,15 +43,13 @@ export function registerSettings(bot: HashiBot) {
 	const features = new Menu<HashiContext>("settings_features")
 		.dynamic(async (_ctx) => {
 			const range = new MenuRange<HashiContext>();
-			const currentSettings = await kv.settings.get();
+			const settings = await getSettings();
 
-			const messageSentEnabled = currentSettings.messageSentNotification;
+			const messageSentEnabled = settings.messageSentNotification;
 			const statusIcon = messageSentEnabled ? "✅" : "❌";
 
 			range.text(`${statusIcon} Message Sent Notification`, async (ctx) => {
-				await kv.settings.update({
-					messageSentNotification: !messageSentEnabled,
-				});
+				await setSetting("messageSentNotification", !messageSentEnabled);
 
 				await ctx.answerCallbackQuery(
 					messageSentEnabled
@@ -91,16 +90,12 @@ export function registerSettings(bot: HashiBot) {
 				return;
 			}
 
-			const settingKey = ctx.session.awaitingTextSetting as TextItem;
+			const settingKey = ctx.session.awaitingTextSetting;
 			if (!settingKey) {
 				return;
 			}
 
-			await kv.settings.update({
-				text: {
-					[settingKey]: text,
-				},
-			});
+			await setText(settingKey, text);
 
 			ctx.session.awaitingTextSetting = null;
 

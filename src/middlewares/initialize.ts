@@ -2,11 +2,11 @@ import { env } from "cloudflare:workers";
 import { createMiddleware } from "hono/factory";
 
 import { bot, initializeBot } from "../bot";
-import { initializeSettings } from "../kv/settings";
+import { initializeTables } from "../db/initialize";
 
 const { GROUP_ID } = env;
 
-let registered = false;
+let initialized = false;
 
 async function checkPermissions() {
 	async function doWithErrorHandling(fn: () => Promise<void>, text: string) {
@@ -31,13 +31,13 @@ async function checkPermissions() {
 }
 
 export const initialize = createMiddleware(async (c, next) => {
-	if (!registered) {
-		registered = true;
+	if (!initialized) {
+		initialized = true;
 
 		const { hostname } = new URL(c.req.url);
 		await bot.api.setWebhook(`https://${hostname}/webhook`);
 
-		await initializeSettings();
+		await initializeTables();
 		await initializeBot(hostname);
 
 		await checkPermissions();

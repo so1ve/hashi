@@ -2,6 +2,7 @@ import { webhookCallback } from "grammy";
 import { Hono } from "hono";
 
 import { bot } from "./bot";
+import { db } from "./db";
 import { checker } from "./middlewares/checker";
 import { errorHandler } from "./middlewares/error-handler";
 import { initialize } from "./middlewares/initialize";
@@ -13,7 +14,13 @@ const app = new Hono<Env>();
 
 app.use(errorHandler).use(checker).use(initialize);
 
-app.get("/", (c) => c.text("Hello, Hashi!"));
+app.get("/", async (c) => {
+	const a = await db.select("users");
+	const b = await db.select("chatTopicMappings");
+	const cc = await db.select("settings");
+
+	return c.json({ status: "ok", users: a, mappings: b, settings: cc });
+});
 app.get("/verify", (c) =>
 	c.render(<VerifyPage siteKey={c.env.TURNSTILE_SITE_KEY} />),
 );

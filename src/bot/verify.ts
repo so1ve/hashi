@@ -1,6 +1,6 @@
 import type { Menu } from "@grammyjs/menu";
 
-import * as kv from "../kv";
+import { db } from "../db";
 import type { HashiContext } from ".";
 import { bot } from ".";
 
@@ -9,7 +9,7 @@ export async function sendVerification(
 	verificationMenu: Menu<HashiContext>,
 	chatId: number,
 ) {
-	let user = await kv.users.get(chatId);
+	const user = (await db.select("users", null, { chatId }))[0];
 
 	if (!user?.verified) {
 		if (user?.verificationMessageId) {
@@ -25,27 +25,32 @@ export async function sendVerification(
 			},
 		);
 
-		user = await kv.users.get(chatId);
-		await kv.users.set(chatId, {
-			...user,
-			verificationMessageId: message.message_id,
-		});
+		await db.update(
+			"users",
+			{
+				verificationMessageId: message.message_id,
+			},
+			{ chatId },
+		);
 	}
 }
 
 export async function verifySuccess(chatId: number) {
-	const user = await kv.users.get(chatId);
+	const user = (await db.select("users", null, { chatId }))[0];
 	if (user) {
 		if (user.verificationMessageId) {
 			try {
 				await bot.api.deleteMessage(chatId, user.verificationMessageId);
 			} catch {}
 		}
-		await kv.users.set(chatId, {
-			...user,
-			verified: true,
-			verificationMessageId: undefined,
-		});
+		await db.update(
+			"users",
+			{
+				verified: 1,
+				verificationMessageId: null,
+			},
+			{ chatId },
+		);
 	}
 	await bot.api.sendMessage(
 		chatId,

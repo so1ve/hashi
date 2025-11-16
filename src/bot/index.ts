@@ -5,7 +5,8 @@ import { env } from "cloudflare:workers";
 import type { Context, SessionFlavor } from "grammy";
 import { Bot, session } from "grammy";
 
-import * as kv from "../kv";
+import { getText } from "../db";
+import type { TextsKey } from "../types";
 import { registerBlockCommand } from "./block";
 import { registerBotBlockedNotifier } from "./bot-blocked-notifier";
 import { registerForwarder } from "./forwarder";
@@ -14,7 +15,7 @@ import { registerSettings } from "./settings";
 
 // Define the shape of our session.
 interface SessionData {
-	awaitingTextSetting: string | null;
+	awaitingTextSetting: TextsKey | null;
 }
 
 export type HashiContext = HydrateFlavor<Context & SessionFlavor<SessionData>>;
@@ -61,8 +62,8 @@ export async function initializeBot(hostname: string) {
 		async (ctx) => ctx.chat.type === "private",
 		guard(verificationMenu),
 		async (ctx) => {
-			const settings = await kv.settings.get();
-			await ctx.reply(settings.text.welcome);
+			const text = await getText("welcome");
+			await ctx.reply(text);
 		},
 	);
 

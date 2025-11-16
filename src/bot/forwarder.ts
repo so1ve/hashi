@@ -1,7 +1,7 @@
 import type { Menu } from "@grammyjs/menu";
 import { env } from "cloudflare:workers";
 
-import * as kv from "../kv";
+import { db, getSetting, getText } from "../db";
 import { Aborted } from "../utils";
 import { guard } from "./guard";
 import { ensureTopic } from "./utils";
@@ -23,9 +23,12 @@ export function registerForwarder(
 
 			await ctx.message.copy(env.GROUP_ID, { message_thread_id: topicId });
 
-			const settings = await kv.settings.get();
-			if (settings.messageSentNotification) {
-				const _message = await ctx.reply(settings.text.messageSent);
+			const messageSentNotificationEnabled = await getSetting(
+				"messageSentNotification",
+			);
+			const messageSentText = await getText("messageSent");
+			if (messageSentNotificationEnabled) {
+				const _message = await ctx.reply(messageSentText);
 
 				// TODO: Re-enable deletion after fixing setTimeout not working issue
 				// setTimeout(async () => {
@@ -39,23 +42,30 @@ export function registerForwarder(
 		async (ctx) =>
 			!ctx.from.is_bot && ctx.chat.id === Number.parseInt(env.GROUP_ID),
 		async (ctx) => {
-			const topicId = ctx.message.message_thread_id;
-			const privateChatId = await kv.privateChatIdFromTopicId.get(topicId);
+			const mapping = (
+				await db.select("chatTopicMappings", null, {
+					topicId: ctx.message.message_thread_id,
+				})
+			)[0];
 
-			if (!privateChatId) {
+			if (!mapping?.chatId) {
 				await ctx.reply("Could not find the private chat ID for this topic.");
 
 				return;
 			}
 
-			const user = await kv.users.get(privateChatId);
+			const user = (
+				await db.select("users", null, {
+					chatId: mapping.chatId,
+				})
+			)[0];
 			if (user?.blocked) {
 				await ctx.reply("This user has been blocked from using this bot.");
 
 				return;
 			}
 
-			await ctx.message.copy(privateChatId);
+			await ctx.message.copy(mapping.chatId);
 		},
 	);
 }

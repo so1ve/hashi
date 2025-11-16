@@ -1,7 +1,7 @@
 import type { Menu } from "@grammyjs/menu";
 import type { Middleware } from "grammy";
 
-import * as kv from "../kv";
+import { db } from "../db";
 import { ensureTopic, ensureUser } from "./utils";
 import { sendVerification } from "./verify";
 import type { HashiContext } from ".";
@@ -14,7 +14,12 @@ export const guard =
 		}
 		await ensureUser(ctx.chatId);
 		await ensureTopic(ctx, ctx.chatId);
-		const user = await kv.users.get(ctx.chatId);
+		const result = (
+			await db.select("users", null, {
+				chatId: ctx.chatId,
+			})
+		)[0];
+		const user = result;
 		if (user) {
 			if (user.blocked) {
 				await ctx.reply("You are blocked from using this bot.");
