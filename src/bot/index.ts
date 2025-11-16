@@ -11,7 +11,6 @@ import { registerBotBlockedNotifier } from "./bot-blocked-notifier";
 import { registerForwarder } from "./forwarder";
 import { guard } from "./guard";
 import { registerSettings } from "./settings";
-import { ensureTopic } from "./utils";
 
 // Define the shape of our session.
 interface SessionData {
@@ -62,8 +61,6 @@ export async function initializeBot(hostname: string) {
 		async (ctx) => ctx.chat.type === "private",
 		guard(verificationMenu),
 		async (ctx) => {
-			await ensureTopic(ctx, ctx.chatId);
-
 			const settings = await kv.settings.get();
 			await ctx.reply(settings.text.welcome);
 		},

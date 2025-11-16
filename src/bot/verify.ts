@@ -10,9 +10,6 @@ export async function sendVerification(
 	chatId: number,
 ) {
 	let user = await kv.users.get(chatId);
-	if (!user) {
-		await kv.users.set(chatId, { blocked: false, verified: false });
-	}
 
 	if (!user?.verified) {
 		if (user?.verificationMessageId) {
@@ -40,7 +37,9 @@ export async function verifySuccess(chatId: number) {
 	const user = await kv.users.get(chatId);
 	if (user) {
 		if (user.verificationMessageId) {
-			await bot.api.deleteMessage(chatId, user.verificationMessageId);
+			try {
+				await bot.api.deleteMessage(chatId, user.verificationMessageId);
+			} catch {}
 		}
 		await kv.users.set(chatId, {
 			...user,

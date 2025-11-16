@@ -38,7 +38,7 @@ const createCachedKv = <V, R>(
 });
 
 const mappingCache = new QuickLRU<string, number>({ maxSize: 1000 });
-const blockedUsersCache = new QuickLRU<string, User>({ maxSize: 1000 });
+const usersCache = new QuickLRU<string, User>({ maxSize: 1000 });
 
 export const topicIdFromPrivateChatId = createCachedKv<number, number>(
 	mappingCache,
@@ -49,7 +49,7 @@ export const privateChatIdFromTopicId = createCachedKv<number, number>(
 	(key) => `topic_to_private_chat:${key}`,
 );
 export const users = createCachedKv<number, User>(
-	blockedUsersCache,
+	usersCache,
 	(key) => `user:${key}`,
 );
 export { settings } from "./settings";

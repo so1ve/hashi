@@ -72,3 +72,12 @@ export async function ensureTopic(ctx: HashiContext, privateChatId: number) {
 
 	return result;
 }
+
+export async function ensureUser(chatId: number) {
+	const user = await kv.users.get(chatId);
+	if (!user) {
+		await kv.users.set(chatId, { blocked: false, verified: false });
+	}
+
+	return await kv.users.get(chatId);
+}
