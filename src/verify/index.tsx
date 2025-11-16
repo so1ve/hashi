@@ -26,7 +26,7 @@ async function onTurnstileSuccess(token: string) {
 
 	setTimeout(() => {
 		window.Telegram.WebApp.close();
-	}, 2500);
+	}, 1000);
 }
 
 const style = `
