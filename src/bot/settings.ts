@@ -26,8 +26,8 @@ export function registerSettings(bot: HashiBot) {
 
 				range.text(buttonText, async (ctx) => {
 					const message = currentValue
-						? `Current ${label}:\n\n${currentValue}\n\nPlease send the new text. You can use Markdown formatting.\n\nSend /cancel to cancel.`
-						: `Please send the text for "${label}". You can use Markdown formatting.\n\nSend /cancel to cancel.`;
+						? `Current ${label}:\n\n${currentValue}\n\nPlease send the new text.\n\nSend /cancel to cancel.`
+						: `Please send the text for "${label}".\n\nSend /cancel to cancel.`;
 
 					await ctx.reply(message);
 					ctx.session.awaitingTextSetting = item;
