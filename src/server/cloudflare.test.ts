@@ -115,12 +115,14 @@ const createMockFetch =
         });
       }
       if (method === "getChat") {
+        const requestedId = Number(body.chat_id);
+
         return Response.json({
           ok: true,
           result: {
-            id: GROUP_ID,
+            id: requestedId,
             type: "supergroup",
-            title: "Hashi Admin",
+            title: requestedId === GROUP_ID ? "Hashi Admin" : "New Admin Group",
             is_forum: true,
           },
         });
@@ -251,70 +253,78 @@ describe("hashi worker", () => {
     await reset();
   });
 
-  it("serves healthz, status page, authenticated setup, and rejects forged webhooks", async () => {
+  it("serves healthz, auto-registers webhook once on /, rejects forged webhooks, and handles /id", async () => {
     const health = await callWorker("/healthz");
 
     expect(health.status).toBe(200);
     await expect(health.text()).resolves.toBe("ok\n");
 
-    const status = await callWorker("/");
+    const greeting = await callWorker("/");
 
-    expect(status.status).toBe(200);
-    await expect(status.text()).resolves.toContain("橋 Hashi");
-
-    const unauthWebhook = await postWebhook({ update_id: 1 }, "wrong-secret");
-
-    expect(unauthWebhook.status).toBe(401);
-
-    const unauthSetup = await callWorker("/api/setup", { method: "POST" });
-
-    expect(unauthSetup.status).toBe(401);
-
-    const setupRes = await callWorker("/api/setup", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${webhookSecret}` },
-    });
-
-    expect(setupRes.status).toBe(200);
-
-    const report = await setupRes.json<{
-      ok: boolean;
-      botUsername: string;
-      webhookUrl: string;
-    }>();
-
-    expect(report.ok).toBeTruthy();
-    expect(report.botUsername).toBe("hashi_bot");
-    expect(report.webhookUrl).toBe(`${BASE_URL}/webhook`);
+    expect(greeting.status).toBe(200);
+    await expect(greeting.text()).resolves.toBe("Hello from Hashi!");
 
     const setCommandsCalls = state.calls.filter(
       (c) => c.method === "setMyCommands",
     );
 
-    expect(setCommandsCalls).toHaveLength(2);
+    expect(setCommandsCalls).toHaveLength(3);
     expect(
       state.calls.find((c) => c.method === "setWebhook")?.body.secret_token,
     ).toBe(webhookSecret);
 
-    // Also accepts BOT_TOKEN directly for one-click deploy setup
-    const botTokenSetupRes = await callWorker("/api/setup", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${BOT_TOKEN}` },
-    });
+    // Second GET / makes ZERO Telegram API calls because setup_fingerprint matches
+    const callsAfterFirstSetup = state.calls.length;
+    const secondGreeting = await callWorker("/");
 
-    expect(botTokenSetupRes.status).toBe(200);
+    expect(secondGreeting.status).toBe(200);
+    expect(state.calls).toHaveLength(callsAfterFirstSetup);
 
-    // Renders friendly setup-required page when BOT_TOKEN/GROUP_ID are not set yet
+    const unauthWebhook = await postWebhook({ update_id: 1 }, "wrong-secret");
+
+    expect(unauthWebhook.status).toBe(401);
+
+    // Without GROUP_ID, GET / still registers webhook + /id and returns guidance
     const ctx = createExecutionContext();
-    const unconfiguredRes = await worker.fetch(
+    const noGroupRes = await worker.fetch(
       new Request(`${BASE_URL}/`),
-      Object.assign({}, env),
+      Object.assign({}, testEnv, { GROUP_ID: "" }),
       ctx,
     );
     await waitOnExecutionContext(ctx);
 
-    expect(unconfiguredRes.status).toBe(503);
-    await expect(unconfiguredRes.text()).resolves.toContain("Setup required");
+    expect(noGroupRes.status).toBe(200);
+    await expect(noGroupRes.text()).resolves.toContain("send /id");
+
+    // /id returns chat ID and setup diagnostics in any group (even a brand-new group)
+    const newGroupId = -100_777_666_555;
+    const idRes = await postWebhook({
+      update_id: 99,
+      message: {
+        message_id: 42,
+        chat: {
+          id: newGroupId,
+          type: "supergroup",
+          title: "New Admin Group",
+          is_forum: true,
+        },
+        from: { id: 777, is_bot: false, first_name: "Admin" },
+        date: unixNow(),
+        text: "/id",
+      },
+    });
+
+    expect(idRes.status).toBe(200);
+
+    const idReply = state.calls.find(
+      (c) => c.method === "sendMessage" && c.body.chat_id === newGroupId,
+    );
+
+    expect(String(idReply?.body.text)).toContain(String(newGroupId));
+    expect(String(idReply?.body.text)).toContain("Topics: <b>Enabled</b>");
+    expect(String(idReply?.body.text)).toContain(
+      "Configured GROUP_ID: <b>No</b>",
+    );
   });
 
   it("forwards bidirectionally with HTML escaping, reply links, edits, reactions, and topic recovery", async () => {

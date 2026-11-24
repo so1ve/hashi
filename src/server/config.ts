@@ -20,7 +20,7 @@ export interface TurnstileConfig {
 
 export interface LoadedConfig {
   botToken: string;
-  groupId: number;
+  groupId: number | null;
   publicBaseUrl: string | null;
   webhookSecret: string;
   turnstile: TurnstileConfig | null;
@@ -31,10 +31,10 @@ export interface LoadedConfig {
 const stripTrailingSlash = (url: string): string =>
   url.trim().replace(/\/+$/, "");
 
-function parseGroupId(raw: string | undefined): number {
+function parseOptionalGroupId(raw: string | undefined): number | null {
   const trimmed = raw?.trim();
   if (!trimmed) {
-    throw new Error("GROUP_ID environment variable is required");
+    return null;
   }
   if (!/^-?\d+$/.test(trimmed)) {
     throw new Error(`GROUP_ID must be an integer, got '${trimmed}'`);
@@ -90,7 +90,7 @@ async function buildConfig(env: ServerRuntimeEnv): Promise<LoadedConfig> {
     throw new Error("BOT_TOKEN secret is required");
   }
 
-  const groupId = parseGroupId(env.GROUP_ID);
+  const groupId = parseOptionalGroupId(env.GROUP_ID);
   const publicBaseUrl = parsePublicBaseUrl(env.PUBLIC_BASE_URL);
   const explicitSecret = env.WEBHOOK_SECRET?.trim();
   const webhookSecret = explicitSecret || (await deriveWebhookSecret(botToken));

@@ -55,6 +55,38 @@ describe("hashi portable node runtime", () => {
               : input.url;
         if (url.startsWith("https://telegram.mock/")) {
           telegramCalls.push(url);
+          if (url.endsWith("/getMe")) {
+            return Response.json({
+              ok: true,
+              result: {
+                id: 999,
+                is_bot: true,
+                first_name: "Hashi",
+                username: "hashi_bot",
+              },
+            });
+          }
+          if (url.endsWith("/getChat")) {
+            return Response.json({
+              ok: true,
+              result: {
+                id: -100_999_888_777,
+                type: "supergroup",
+                title: "Admin",
+                is_forum: true,
+              },
+            });
+          }
+          if (url.endsWith("/getChatMember")) {
+            return Response.json({
+              ok: true,
+              result: {
+                status: "administrator",
+                can_manage_topics: true,
+                user: { id: 999, is_bot: true, first_name: "Hashi" },
+              },
+            });
+          }
           if (url.endsWith("/createForumTopic")) {
             return Response.json({
               ok: true,
@@ -105,9 +137,10 @@ describe("hashi portable node runtime", () => {
       expect(css.status).toBe(200);
       await expect(css.text()).resolves.toContain("--tg-theme-bg-color");
 
-      const setupJs = await realFetch(`${origin}/setup.js`);
+      const root = await realFetch(`${origin}/`);
 
-      expect(setupJs.status).toBe(200);
+      expect(root.status).toBe(200);
+      await expect(root.text()).resolves.toBe("Hello from Hashi!");
 
       const webhookRes = await realFetch(`${origin}/webhook`, {
         method: "POST",

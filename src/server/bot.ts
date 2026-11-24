@@ -68,8 +68,8 @@ export interface BotDeps {
 export interface SetupReport {
   botUsername: string;
   botId: number;
-  groupTitle: string;
-  groupId: number;
+  groupTitle: string | null;
+  groupId: number | null;
   webhookUrl: string;
   turnstileConfigured: boolean;
 }
@@ -176,72 +176,109 @@ export async function setupBot(
   const { config, telegram, baseUrl } = deps;
   const me = await telegram.getMe();
 
-  const chat = await telegram.getChat(config.groupId);
-  if (chat.type !== "supergroup") {
-    throw new Error(
-      `GROUP_ID ${config.groupId} must be a supergroup, got '${chat.type}'`,
-    );
-  }
-  if (!chat.is_forum) {
-    throw new Error(
-      `GROUP_ID ${config.groupId} does not have Topics enabled. Enable Topics in the group settings first.`,
-    );
-  }
-
-  const membership = await telegram.getChatMember(config.groupId, me.id);
-  if (
-    membership.status !== "administrator" &&
-    membership.status !== "creator"
-  ) {
-    throw new Error(
-      `Bot @${me.username ?? me.id} must be an administrator in group ${config.groupId}`,
-    );
-  }
-  if (
-    membership.status === "administrator" &&
-    membership.can_manage_topics === false
-  ) {
-    throw new Error(
-      `Bot @${me.username ?? me.id} needs the "Manage Topics" permission in group ${config.groupId}`,
-    );
-  }
-
+  // Always register webhook and global commands first so /id works even if GROUP_ID is unset or stale.
+  const webhookUrl = `${baseUrl}/webhook`;
   await Promise.all([
+    telegram.setWebhook({
+      url: webhookUrl,
+      secret_token: config.webhookSecret,
+      allowed_updates: ALLOWED_UPDATES,
+    }),
     telegram.setMyCommands(
       [{ command: "start", description: "Start chatting" }],
       { type: "all_private_chats" },
     ),
     telegram.setMyCommands(
+      [{ command: "id", description: "Show this chat's ID and setup info" }],
+      { type: "all_group_chats" },
+    ),
+  ]);
+
+  let groupTitle: string | null = null;
+  if (config.groupId !== null) {
+    const chat = await telegram.getChat(config.groupId);
+    if (chat.type !== "supergroup") {
+      throw new Error(
+        `GROUP_ID ${config.groupId} must be a supergroup, got '${chat.type}'`,
+      );
+    }
+    if (!chat.is_forum) {
+      throw new Error(
+        `GROUP_ID ${config.groupId} does not have Topics enabled. Enable Topics in the group settings first.`,
+      );
+    }
+
+    const membership = await telegram.getChatMember(config.groupId, me.id);
+    if (
+      membership.status !== "administrator" &&
+      membership.status !== "creator"
+    ) {
+      throw new Error(
+        `Bot @${me.username ?? me.id} must be an administrator in group ${config.groupId}`,
+      );
+    }
+    if (
+      membership.status === "administrator" &&
+      membership.can_manage_topics === false
+    ) {
+      throw new Error(
+        `Bot @${me.username ?? me.id} needs the "Manage Topics" permission in group ${config.groupId}`,
+      );
+    }
+
+    groupTitle = chat.title ?? String(config.groupId);
+    await telegram.setMyCommands(
       [
         { command: "settings", description: "Configure bot (in General)" },
         { command: "info", description: "Show user info for this topic" },
         { command: "block", description: "Block this topic's user" },
         { command: "unblock", description: "Unblock this topic's user" },
+        { command: "id", description: "Show this chat's ID and setup info" },
         { command: "cancel", description: "Cancel editing a setting" },
       ],
       { type: "chat", chat_id: config.groupId },
-    ),
-  ]);
-
-  const webhookUrl = `${baseUrl}/webhook`;
-  await telegram.setWebhook({
-    url: webhookUrl,
-    secret_token: config.webhookSecret,
-    allowed_updates: ALLOWED_UPDATES,
-  });
+    );
+  }
 
   return {
     botUsername: me.username ?? String(me.id),
     botId: me.id,
-    groupTitle: chat.title ?? String(config.groupId),
+    groupTitle,
     groupId: config.groupId,
     webhookUrl,
     turnstileConfigured: config.turnstile !== null,
   };
 }
 
+export async function ensureBotSetup(
+  deps: Pick<BotDeps, "db" | "config" | "telegram" | "baseUrl">,
+): Promise<boolean> {
+  if (!deps.baseUrl.startsWith("https://")) {
+    return false;
+  }
+  const fingerprint = `v1|${deps.baseUrl}|${deps.config.groupId ?? ""}|${deps.config.webhookSecret.slice(0, 16)}`;
+  const existing = await getSystemValue(deps.db, "setup_fingerprint");
+  if (existing === fingerprint) {
+    return false;
+  }
+
+  await setupBot(deps);
+  await setSystemValue(deps.db, "setup_fingerprint", fingerprint);
+
+  return true;
+}
+
+function requireGroupId(config: LoadedConfig): number {
+  if (config.groupId === null) {
+    throw new Error("GROUP_ID is not configured");
+  }
+
+  return config.groupId;
+}
+
 async function ensureNotificationsTopic(deps: BotDeps): Promise<number> {
   const { db, config, telegram } = deps;
+  const groupId = requireGroupId(config);
   const stored = await getSystemValue(db, "notifications_topic_id");
   if (stored) {
     const parsed = Number.parseInt(stored, 10);
@@ -250,10 +287,7 @@ async function ensureNotificationsTopic(deps: BotDeps): Promise<number> {
     }
   }
 
-  const topic = await telegram.createForumTopic(
-    config.groupId,
-    "Notifications",
-  );
+  const topic = await telegram.createForumTopic(groupId, "Notifications");
   const won = await claimSystemValue(
     db,
     "notifications_topic_id",
@@ -261,7 +295,7 @@ async function ensureNotificationsTopic(deps: BotDeps): Promise<number> {
   );
   if (!won) {
     await telegram
-      .deleteForumTopic(config.groupId, topic.message_thread_id)
+      .deleteForumTopic(groupId, topic.message_thread_id)
       .catch(() => {});
     const winner = await getSystemValue(db, "notifications_topic_id");
     if (winner) {
@@ -275,14 +309,10 @@ async function ensureNotificationsTopic(deps: BotDeps): Promise<number> {
   }
 
   await telegram
-    .sendMessage(
-      config.groupId,
-      "New user chats will be announced in this topic.",
-      {
-        message_thread_id: topic.message_thread_id,
-        disable_notification: true,
-      },
-    )
+    .sendMessage(groupId, "New user chats will be announced in this topic.", {
+      message_thread_id: topic.message_thread_id,
+      disable_notification: true,
+    })
     .catch(() => {});
 
   return topic.message_thread_id;
@@ -296,10 +326,11 @@ async function notifyNewChat(
   if (!(await getFeature(deps.db, "new_chat_notification"))) {
     return;
   }
+  const groupId = requireGroupId(deps.config);
 
   async function sendNotice(notificationsTopicId: number) {
     await deps.telegram.sendMessage(
-      deps.config.groupId,
+      groupId,
       `<b>New chat started</b>\n\n${formatUserInfoHtml(user)}`,
       {
         message_thread_id: notificationsTopicId,
@@ -309,7 +340,7 @@ async function notifyNewChat(
             [
               {
                 text: "Open Topic",
-                url: topicDeepLink(deps.config.groupId, topicId),
+                url: topicDeepLink(groupId, topicId),
               },
             ],
           ],
@@ -323,17 +354,14 @@ async function notifyNewChat(
     await sendNotice(notificationsTopicId);
   } catch (error) {
     if (isTopicClosedError(error)) {
-      await deps.telegram.reopenForumTopic(
-        deps.config.groupId,
-        notificationsTopicId,
-      );
+      await deps.telegram.reopenForumTopic(groupId, notificationsTopicId);
       await sendNotice(notificationsTopicId);
 
       return;
     }
     if (isTopicDeletedError(error)) {
       const recreated = await deps.telegram.createForumTopic(
-        deps.config.groupId,
+        groupId,
         "Notifications",
       );
       notificationsTopicId = recreated.message_thread_id;
@@ -357,16 +385,15 @@ async function createAndInitializeUserTopic(
   mode: "claim" | "replace",
 ): Promise<number> {
   const { db, config, telegram } = deps;
+  const groupId = requireGroupId(config);
   const topicName = user.displayName || `User ${user.chatId}`;
-  const created = await telegram.createForumTopic(config.groupId, topicName);
+  const created = await telegram.createForumTopic(groupId, topicName);
   const newTopicId = created.message_thread_id;
 
   if (mode === "claim") {
     const won = await claimUserTopic(db, user.chatId, newTopicId);
     if (!won) {
-      await telegram
-        .deleteForumTopic(config.groupId, newTopicId)
-        .catch(() => {});
+      await telegram.deleteForumTopic(groupId, newTopicId).catch(() => {});
       const latest = await getUserByChatId(db, user.chatId);
       if (latest?.topicId !== null && latest?.topicId !== undefined) {
         return latest.topicId;
@@ -378,7 +405,7 @@ async function createAndInitializeUserTopic(
   }
 
   const updatedUser: UserRecord = { ...user, topicId: newTopicId };
-  await telegram.sendMessage(config.groupId, formatUserInfoHtml(updatedUser), {
+  await telegram.sendMessage(groupId, formatUserInfoHtml(updatedUser), {
     message_thread_id: newTopicId,
     parse_mode: "HTML",
     disable_notification: true,
@@ -473,7 +500,7 @@ export async function completeUserVerification(
   const successText = await getText(db, "verify_success");
   await telegram.sendMessage(chatId, successText).catch(() => {});
 
-  if (user.topicId !== null) {
+  if (user.topicId !== null && config.groupId !== null) {
     await telegram
       .sendMessage(config.groupId, "User passed human verification.", {
         message_thread_id: user.topicId,
@@ -527,13 +554,21 @@ async function handlePrivateMessage(
     return;
   }
 
+  if (config.groupId === null) {
+    await telegram.sendMessage(
+      chatId,
+      "Bot is not configured yet. Please contact the administrator.",
+    );
+
+    return;
+  }
+  const groupId = config.groupId;
+
   let topicId = await ensureUserTopic(deps, user);
 
   if (nameChanged && user.topicId !== null) {
     deps.waitUntil(
-      telegram
-        .editForumTopic(config.groupId, topicId, displayName)
-        .catch(() => {}),
+      telegram.editForumTopic(groupId, topicId, displayName).catch(() => {}),
     );
   }
 
@@ -550,7 +585,7 @@ async function handlePrivateMessage(
   }
 
   const copyToTopic = (targetTopicId: number, replyId?: number) =>
-    telegram.copyMessage(config.groupId, chatId, message.message_id, {
+    telegram.copyMessage(groupId, chatId, message.message_id, {
       message_thread_id: targetTopicId,
       ...(replyId === undefined
         ? {}
@@ -568,7 +603,7 @@ async function handlePrivateMessage(
     copiedId = copied.message_id;
   } catch (error) {
     if (isTopicClosedError(error)) {
-      await telegram.reopenForumTopic(config.groupId, topicId);
+      await telegram.reopenForumTopic(groupId, topicId);
       const copied = await copyToTopic(topicId, replyToGroupMessageId);
       copiedId = copied.message_id;
     } else if (isTopicDeletedError(error)) {
@@ -604,6 +639,7 @@ async function handleGroupGeneralMessage(
   message: TelegramMessage,
 ): Promise<void> {
   const { db, config, telegram } = deps;
+  const groupId = requireGroupId(config);
   const userId = message.from?.id;
   if (!userId) {
     return;
@@ -611,8 +647,8 @@ async function handleGroupGeneralMessage(
 
   const cmd = parseCommand(message.text);
   if (cmd?.command === "settings") {
-    await clearPendingEdit(db, config.groupId, userId, GENERAL_TOPIC_ID);
-    await telegram.sendMessage(config.groupId, "<b>Hashi Settings</b>", {
+    await clearPendingEdit(db, groupId, userId, GENERAL_TOPIC_ID);
+    await telegram.sendMessage(groupId, "<b>Hashi Settings</b>", {
       parse_mode: "HTML",
       reply_markup: settingsMainMarkup(),
     });
@@ -623,12 +659,12 @@ async function handleGroupGeneralMessage(
   if (cmd?.command === "cancel") {
     const cleared = await clearPendingEdit(
       db,
-      config.groupId,
+      groupId,
       userId,
       GENERAL_TOPIC_ID,
     );
     await telegram.sendMessage(
-      config.groupId,
+      groupId,
       cleared ? "Cancelled." : "Nothing to cancel.",
       {
         reply_parameters: {
@@ -647,7 +683,7 @@ async function handleGroupGeneralMessage(
     cmd?.command === "info"
   ) {
     await telegram.sendMessage(
-      config.groupId,
+      groupId,
       `Use /${cmd.command} inside a user's topic.`,
       {
         reply_parameters: {
@@ -661,12 +697,7 @@ async function handleGroupGeneralMessage(
   }
 
   if (message.text !== undefined && !cmd) {
-    const pending = await getPendingEdit(
-      db,
-      config.groupId,
-      userId,
-      GENERAL_TOPIC_ID,
-    );
+    const pending = await getPendingEdit(db, groupId, userId, GENERAL_TOPIC_ID);
     if (!pending) {
       return;
     }
@@ -674,7 +705,7 @@ async function handleGroupGeneralMessage(
     const trimmed = message.text.trim();
     if (!trimmed) {
       await telegram.sendMessage(
-        config.groupId,
+        groupId,
         "Text cannot be empty. Send the new text or /cancel.",
         {
           reply_parameters: {
@@ -688,9 +719,9 @@ async function handleGroupGeneralMessage(
     }
 
     await setText(db, pending.settingKey, trimmed);
-    await clearPendingEdit(db, config.groupId, userId, GENERAL_TOPIC_ID);
+    await clearPendingEdit(db, groupId, userId, GENERAL_TOPIC_ID);
     await telegram.sendMessage(
-      config.groupId,
+      groupId,
       `Updated <b>${escapeHtml(TEXT_LABELS[pending.settingKey])}</b>.`,
       {
         parse_mode: "HTML",
@@ -708,6 +739,7 @@ async function handleGroupTopicMessage(
   message: TelegramMessage,
 ): Promise<void> {
   const { db, config, telegram } = deps;
+  const groupId = requireGroupId(config);
   const topicId = message.message_thread_id;
   if (!topicId) {
     return;
@@ -727,7 +759,7 @@ async function handleGroupTopicMessage(
   const cmd = parseCommand(message.text);
   if (cmd?.command === "settings") {
     await telegram.sendMessage(
-      config.groupId,
+      groupId,
       "Please run /settings in the General topic.",
       {
         message_thread_id: topicId,
@@ -749,7 +781,7 @@ async function handleGroupTopicMessage(
       cmd?.command === "info"
     ) {
       await telegram.sendMessage(
-        config.groupId,
+        groupId,
         "This topic is not linked to a user.",
         {
           message_thread_id: topicId,
@@ -765,7 +797,7 @@ async function handleGroupTopicMessage(
   }
 
   if (cmd?.command === "info") {
-    await telegram.sendMessage(config.groupId, formatUserInfoHtml(user), {
+    await telegram.sendMessage(groupId, formatUserInfoHtml(user), {
       message_thread_id: topicId,
       parse_mode: "HTML",
       reply_markup: userActionsKeyboard(user),
@@ -782,7 +814,7 @@ async function handleGroupTopicMessage(
     const blocked = cmd.command === "block";
     await setUserBlocked(db, user.chatId, blocked);
     await telegram.sendMessage(
-      config.groupId,
+      groupId,
       `User has been <b>${blocked ? "blocked" : "unblocked"}</b>.`,
       {
         message_thread_id: topicId,
@@ -803,7 +835,7 @@ async function handleGroupTopicMessage(
 
   if (user.blocked) {
     await telegram.sendMessage(
-      config.groupId,
+      groupId,
       "This user is blocked. Use /unblock to resume messaging.",
       {
         message_thread_id: topicId,
@@ -832,7 +864,7 @@ async function handleGroupTopicMessage(
   try {
     const copied = await telegram.copyMessage(
       user.chatId,
-      config.groupId,
+      groupId,
       message.message_id,
       replyToPrivateMessageId === undefined
         ? undefined
@@ -857,7 +889,7 @@ async function handleGroupTopicMessage(
         ? "Could not deliver message: the user has blocked the bot or is unavailable."
         : `Could not deliver message: ${error.description}`;
       await telegram
-        .sendMessage(config.groupId, notice, {
+        .sendMessage(groupId, notice, {
           message_thread_id: topicId,
           reply_parameters: {
             message_id: message.message_id,
@@ -878,6 +910,7 @@ async function handleEditedMessage(
   message: TelegramMessage,
 ): Promise<void> {
   const { db, config, telegram } = deps;
+  const groupId = config.groupId;
   if (message.from?.is_bot) {
     return;
   }
@@ -885,6 +918,9 @@ async function handleEditedMessage(
   if (message.chat.type === "private") {
     const user = await getUserByChatId(db, message.chat.id);
     if (!user || user.blocked) {
+      return;
+    }
+    if (groupId === null) {
       return;
     }
     const linked = await findGroupMessageByPrivate(
@@ -899,14 +935,14 @@ async function handleEditedMessage(
     try {
       if (message.text !== undefined) {
         await telegram.editMessageText(
-          config.groupId,
+          groupId,
           linked.groupMessageId,
           message.text,
           message.entities ? { entities: message.entities } : undefined,
         );
       } else if (message.caption !== undefined) {
         await telegram.editMessageCaption(
-          config.groupId,
+          groupId,
           linked.groupMessageId,
           message.caption,
           message.caption_entities
@@ -928,7 +964,7 @@ async function handleEditedMessage(
     return;
   }
 
-  if (message.chat.id === config.groupId && message.message_thread_id) {
+  if (message.chat.id === groupId && message.message_thread_id) {
     const linked = await findPrivateMessageByGroup(
       db,
       message.message_thread_id,
@@ -991,23 +1027,19 @@ async function handleCallbackQuery(
     return;
   }
 
-  if (msg?.chat.id !== config.groupId) {
+  if (config.groupId === null || msg?.chat.id !== config.groupId) {
     await telegram.answerCallbackQuery(query.id);
 
     return;
   }
+  const groupId = config.groupId;
 
   if (data === "s:main") {
     await telegram
-      .editMessageText(
-        config.groupId,
-        msg.message_id,
-        "<b>Hashi Settings</b>",
-        {
-          parse_mode: "HTML",
-          reply_markup: settingsMainMarkup(),
-        },
-      )
+      .editMessageText(groupId, msg.message_id, "<b>Hashi Settings</b>", {
+        parse_mode: "HTML",
+        reply_markup: settingsMainMarkup(),
+      })
       .catch((error: unknown) => {
         if (!isMessageNotModifiedError(error)) {
           throw error;
@@ -1021,7 +1053,7 @@ async function handleCallbackQuery(
   if (data === "s:features") {
     await telegram
       .editMessageText(
-        config.groupId,
+        groupId,
         msg.message_id,
         "<b>Hashi Settings · Features</b>",
         {
@@ -1042,7 +1074,7 @@ async function handleCallbackQuery(
   if (data === "s:texts") {
     await telegram
       .editMessageText(
-        config.groupId,
+        groupId,
         msg.message_id,
         "<b>Hashi Settings · Messages</b>",
         {
@@ -1085,7 +1117,7 @@ async function handleCallbackQuery(
     await setFeature(db, key, nextValue);
     await telegram
       .editMessageText(
-        config.groupId,
+        groupId,
         msg.message_id,
         "<b>Hashi Settings · Features</b>",
         {
@@ -1125,7 +1157,7 @@ async function handleCallbackQuery(
       "Send the new text in this topic, or /cancel to keep the current value.",
     ].join("\n");
 
-    const promptMessage = await telegram.sendMessage(config.groupId, prompt, {
+    const promptMessage = await telegram.sendMessage(groupId, prompt, {
       parse_mode: "HTML",
       reply_markup: {
         force_reply: true,
@@ -1135,7 +1167,7 @@ async function handleCallbackQuery(
     });
     await setPendingEdit(
       db,
-      config.groupId,
+      groupId,
       query.from.id,
       GENERAL_TOPIC_ID,
       key,
@@ -1181,15 +1213,10 @@ async function handleCallbackQuery(
     }
 
     await telegram
-      .editMessageText(
-        config.groupId,
-        msg.message_id,
-        formatUserInfoHtml(updated),
-        {
-          parse_mode: "HTML",
-          reply_markup: userActionsKeyboard(updated),
-        },
-      )
+      .editMessageText(groupId, msg.message_id, formatUserInfoHtml(updated), {
+        parse_mode: "HTML",
+        reply_markup: userActionsKeyboard(updated),
+      })
       .catch((error: unknown) => {
         if (!isMessageNotModifiedError(error)) {
           throw error;
@@ -1207,7 +1234,7 @@ async function handleMyChatMember(
   deps: BotDeps,
   event: TelegramChatMemberUpdated,
 ): Promise<void> {
-  if (event.chat.type !== "private") {
+  if (event.chat.type !== "private" || deps.config.groupId === null) {
     return;
   }
   const user = await getUserByChatId(deps.db, event.chat.id);
@@ -1232,6 +1259,55 @@ async function handleMyChatMember(
       })
       .catch(() => {});
   }
+}
+
+async function handleGroupInfoCommand(
+  deps: BotDeps,
+  message: TelegramMessage,
+): Promise<void> {
+  const { config, telegram } = deps;
+  const chatId = message.chat.id;
+
+  const chat = await telegram.getChat(chatId).catch(() => message.chat);
+  let botRoleLine = "Bot Role: unknown";
+  try {
+    const me = await telegram.getMe();
+    const member = await telegram.getChatMember(chatId, me.id);
+    if (member.status === "administrator") {
+      const canTopics = member.can_manage_topics !== false;
+      botRoleLine = `Bot Role: <b>administrator</b> (Manage Topics: <b>${canTopics ? "Yes" : "No"}</b>)`;
+    } else {
+      botRoleLine = `Bot Role: <b>${escapeHtml(member.status)}</b> (promote to administrator with Manage Topics)`;
+    }
+  } catch {
+    // Keep fallback line if membership cannot be queried
+  }
+
+  const lines = [
+    "<b>Chat Info</b>",
+    `Title: ${escapeHtml(chat.title ?? "—")}`,
+    `Chat ID: <code>${chatId}</code>`,
+    `Type: <code>${escapeHtml(chat.type)}</code>`,
+    `Topics: <b>${chat.is_forum ? "Enabled" : "Disabled"}</b>`,
+  ];
+  if (message.is_topic_message && message.message_thread_id !== undefined) {
+    lines.push(`Topic ID: <code>${message.message_thread_id}</code>`);
+  }
+  lines.push(
+    botRoleLine,
+    `Configured GROUP_ID: <b>${chatId === config.groupId ? "Yes" : "No"}</b>`,
+  );
+
+  await telegram.sendMessage(chatId, lines.join("\n"), {
+    parse_mode: "HTML",
+    ...(message.is_topic_message && message.message_thread_id !== undefined
+      ? { message_thread_id: message.message_thread_id }
+      : {}),
+    reply_parameters: {
+      message_id: message.message_id,
+      allow_sending_without_reply: true,
+    },
+  });
 }
 
 export async function handleTelegramUpdate(
@@ -1267,11 +1343,20 @@ export async function handleTelegramUpdate(
     return;
   }
 
-  if (message.chat.id === deps.config.groupId) {
-    if (isGeneralTopicMessage(message)) {
-      await handleGroupGeneralMessage(deps, message);
-    } else {
-      await handleGroupTopicMessage(deps, message);
+  if (message.chat.type === "group" || message.chat.type === "supergroup") {
+    const cmd = parseCommand(message.text);
+    if (cmd?.command === "id" || cmd?.command === "chatinfo") {
+      await handleGroupInfoCommand(deps, message);
+
+      return;
+    }
+
+    if (message.chat.id === deps.config.groupId) {
+      if (isGeneralTopicMessage(message)) {
+        await handleGroupGeneralMessage(deps, message);
+      } else {
+        await handleGroupTopicMessage(deps, message);
+      }
     }
   }
 }

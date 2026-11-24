@@ -9,13 +9,12 @@ English | [简体中文](./README_ZH.md)
 - **Forum-topic relay**: Each private user gets a dedicated topic in your admin supergroup with bidirectional forwarding for text, media, stickers, files, replies, and message edits.
 - **Zero-clutter delivery feedback**: Uses native Telegram message reactions (`👍`) instead of temporary confirmation messages.
 - **Optional human verification**: Cloudflare Turnstile inside a Telegram Mini App with signed state tokens, Telegram `initData` validation, and lazy topic creation (bots cannot spam topics before passing verification).
-- **Stateless & reliable**: Proper SQL migrations, DB-persisted admin settings, authenticated Telegram webhooks (`X-Telegram-Bot-Api-Secret-Token`), and automatic recovery if a topic is closed or deleted.
 - **Dual runtime**: Deploy on Cloudflare Workers + D1 or self-host with Node.js 24+ / Docker + built-in `node:sqlite`.
 
 ## Prerequisites
 
 1. Create a bot via `@BotFather` and save `BOT_TOKEN`.
-2. Create a Telegram supergroup, enable **Topics**, add the bot as an **Administrator** with **Manage Topics** permission, and record its negative `GROUP_ID` (e.g. `-1001234567890`).
+2. Create a Telegram supergroup, enable **Topics**, and add the bot as an **Administrator** with **Manage Topics** permission.
 3. _(Optional)_ Create a widget in [Cloudflare Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile) and record `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`.
 
 ## Deploy (Cloudflare Workers + D1)
@@ -29,10 +28,10 @@ Cloudflare automatically provisions the D1 database (`DB`), applies `migrations/
 1. Click **Deploy to Cloudflare** above and finish creating the Worker.
 2. Open the Worker's **Settings → Variables and Secrets** and add:
    - `BOT_TOKEN` (Secret): Bot token from `@BotFather`
-   - `GROUP_ID` (Variable/Secret): Admin forum supergroup ID (e.g. `-1001234567890`)
+   - `GROUP_ID` (Variable/Secret): Admin forum supergroup ID (e.g. `-1001234567890`). Don't know it yet? Leave it empty first, open your Worker URL once, send `/id` inside your group, and paste the returned ID here.
    - _(Optional)_ `PUBLIC_BASE_URL`: Custom domain if you attach one (otherwise inferred from the incoming request URL)
    - _(Optional)_ `TURNSTILE_SITE_KEY` & `TURNSTILE_SECRET_KEY`: Enable Cloudflare Turnstile verification (add your Worker hostname to the Turnstile widget)
-3. Visit your deployed Worker URL (`https://<your-worker>.workers.dev/`), click **Register webhook**, paste `BOT_TOKEN` (or `WEBHOOK_SECRET`), and click **Register**.
+3. Visit your Worker URL (`https://<your-worker>.workers.dev/`) once — seeing `Hello from Hashi!` confirms the webhook and commands are registered.
 
 ### Manual deploy
 
@@ -43,7 +42,6 @@ pnpm exec wrangler d1 create hashi
 
 pnpm exec wrangler secret put BOT_TOKEN
 pnpm exec wrangler secret put GROUP_ID
-pnpm exec wrangler secret put PUBLIC_BASE_URL       # e.g. https://hashi.example.com
 # Optional:
 pnpm exec wrangler secret put TURNSTILE_SITE_KEY
 pnpm exec wrangler secret put TURNSTILE_SECRET_KEY
@@ -51,18 +49,7 @@ pnpm exec wrangler secret put TURNSTILE_SECRET_KEY
 pnpm run deploy
 ```
 
-Then register the Telegram webhook and scoped commands once:
-
-```bash
-BOT_TOKEN="..." GROUP_ID="-100..." PUBLIC_BASE_URL="https://hashi.example.com" pnpm run setup
-```
-
-Or via HTTP (accepts either `WEBHOOK_SECRET` or `BOT_TOKEN`):
-
-```bash
-curl -X POST https://hashi.example.com/api/setup \
-  -H "Authorization: Bearer $BOT_TOKEN"
-```
+Visit your deployed Worker URL once (or run `pnpm run setup`) to sync the webhook and command menus.
 
 ## Self-Hosting (Node.js / Docker)
 
@@ -86,6 +73,10 @@ docker run -d -p 8787:8787 -v hashi-data:/data \
 ```
 
 ## Admin Commands
+
+In any group the bot is added to:
+
+- `/id` (or `/chatinfo`) — Show the group's `GROUP_ID`, Topics status, and bot permissions.
 
 In the **General** topic of your admin group:
 

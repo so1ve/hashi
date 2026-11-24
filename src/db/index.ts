@@ -91,7 +91,7 @@ export const TEXT_LABELS: Record<TextKey, string> = {
   verify_success: "Verification Success",
 };
 
-export type SystemKey = "notifications_topic_id";
+export type SystemKey = "notifications_topic_id" | "setup_fingerprint";
 
 export const isFeatureKey = (key: string): key is FeatureKey =>
   key in DEFAULT_FEATURES;
@@ -572,34 +572,4 @@ export async function clearPendingEdit(
   );
 
   return res.changes > 0;
-}
-
-export interface StatsSummary {
-  totalUsers: number;
-  activeTopics: number;
-  blockedUsers: number;
-  verifiedUsers: number;
-}
-
-export async function getStatsSummary(db: SqlDatabase): Promise<StatsSummary> {
-  const row = await db.first<{
-    total_users: number;
-    active_topics: number;
-    blocked_users: number;
-    verified_users: number;
-  }>(
-    `SELECT
-       COUNT(*) AS total_users,
-       SUM(CASE WHEN topic_id IS NOT NULL THEN 1 ELSE 0 END) AS active_topics,
-       SUM(CASE WHEN blocked != 0 THEN 1 ELSE 0 END) AS blocked_users,
-       SUM(CASE WHEN verified != 0 THEN 1 ELSE 0 END) AS verified_users
-     FROM users`,
-  );
-
-  return {
-    totalUsers: row?.total_users ?? 0,
-    activeTopics: row?.active_topics ?? 0,
-    blockedUsers: row?.blocked_users ?? 0,
-    verifiedUsers: row?.verified_users ?? 0,
-  };
 }

@@ -2,15 +2,13 @@ import type { Context } from "hono";
 import { Hono } from "hono";
 
 import type { SqlDatabase } from "../db/index.ts";
-import { getFeature, getStatsSummary } from "../db/index.ts";
 import { TelegramClient } from "../telegram/client.ts";
 import type { TelegramUpdate } from "../telegram/types.ts";
-import { handleTelegramUpdate, setupBot } from "./bot.ts";
+import { ensureBotSetup, handleTelegramUpdate } from "./bot.ts";
 import type { LoadedConfig } from "./config.ts";
 import { resolveBaseUrl } from "./config.ts";
 import { errorMessage, timingSafeEqual } from "./crypto.ts";
 import { handleVerifyCallback, handleVerifyPage } from "./routes/verify.ts";
-import { renderStatusPage, renderUnconfiguredPage } from "./ui/pages.ts";
 
 export interface AppContext {
   db: SqlDatabase;
@@ -49,34 +47,6 @@ export function createApp<E extends object = object>(
 
   app.get("/healthz", (c) => c.text("ok\n"));
 
-  app.get("/", async (c) => {
-    let resolved: AppContext;
-    try {
-      resolved = await resolveContext(c);
-    } catch (error) {
-      c.header("Cache-Control", "no-store");
-
-      return c.html(
-        renderUnconfiguredPage(new URL(c.req.url).origin, errorMessage(error)),
-        503,
-      );
-    }
-
-    const [stats, verificationEnabled] = await Promise.all([
-      getStatsSummary(resolved.db),
-      getFeature(resolved.db, "verification"),
-    ]);
-
-    return c.html(
-      renderStatusPage({
-        baseUrl: resolveBaseUrl(resolved.config, c.req.url),
-        turnstileConfigured: resolved.config.turnstile !== null,
-        verificationEnabled,
-        stats,
-      }),
-    );
-  });
-
   app.use("*", async (c, next) => {
     const resolved = await resolveContext(c);
     c.set("db", resolved.db);
@@ -85,10 +55,31 @@ export function createApp<E extends object = object>(
     await next();
   });
 
+  app.get("/", async (c) => {
+    const db = c.get("db");
+    const config = c.get("config");
+    const baseUrl = resolveBaseUrl(config, c.req.url);
+    const telegram = new TelegramClient(
+      config.botToken,
+      config.telegramApiBaseUrl,
+    );
+
+    await ensureBotSetup({ db, config, telegram, baseUrl });
+
+    if (config.groupId === null) {
+      return c.text(
+        "Hello from Hashi! Webhook registered. Add the bot to your forum group, send /id to get GROUP_ID, then set GROUP_ID.",
+      );
+    }
+
+    return c.text("Hello from Hashi!");
+  });
+
   app.get("/verify", handleVerifyPage);
   app.post("/verify/callback", handleVerifyCallback);
 
   app.post("/webhook", async (c) => {
+    const db = c.get("db");
     const config = c.get("config");
     const providedSecret = c.req.header("x-telegram-bot-api-secret-token");
     if (
@@ -105,48 +96,27 @@ export function createApp<E extends object = object>(
       return c.json({ ok: false, error: "invalid JSON" }, 400);
     }
 
-    const telegram = new TelegramClient(
-      config.botToken,
-      config.telegramApiBaseUrl,
-    );
-    await handleTelegramUpdate(
-      {
-        db: c.get("db"),
-        config,
-        telegram,
-        baseUrl: resolveBaseUrl(config, c.req.url),
-        waitUntil: c.get("waitUntil"),
-      },
-      update,
-    );
-
-    return c.json({ ok: true });
-  });
-
-  app.post("/api/setup", async (c) => {
-    const config = c.get("config");
-    const authHeader = c.req.header("authorization") ?? "";
-    const token = authHeader.startsWith("Bearer ")
-      ? authHeader.slice("Bearer ".length).trim()
-      : "";
-    const [matchesSecret, matchesBotToken] = token
-      ? await Promise.all([
-          timingSafeEqual(token, config.webhookSecret),
-          timingSafeEqual(token, config.botToken),
-        ])
-      : [false, false];
-    if (!matchesSecret && !matchesBotToken) {
-      return c.json({ ok: false, error: "unauthorized" }, 401);
-    }
-
     const baseUrl = resolveBaseUrl(config, c.req.url);
     const telegram = new TelegramClient(
       config.botToken,
       config.telegramApiBaseUrl,
     );
-    const report = await setupBot({ config, telegram, baseUrl });
+    const waitUntil = c.get("waitUntil");
 
-    return c.json({ ok: true, ...report });
+    waitUntil(ensureBotSetup({ db, config, telegram, baseUrl }));
+
+    await handleTelegramUpdate(
+      {
+        db,
+        config,
+        telegram,
+        baseUrl,
+        waitUntil,
+      },
+      update,
+    );
+
+    return c.json({ ok: true });
   });
 
   app.onError((error, c) => {
@@ -160,7 +130,7 @@ export function createApp<E extends object = object>(
       }),
     );
 
-    return c.json({ ok: false, error: message }, 500);
+    return c.text(message, 500);
   });
 
   return app;

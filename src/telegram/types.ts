@@ -126,6 +126,7 @@ export interface BotCommand {
 export type BotCommandScope =
   | { type: "default" }
   | { type: "all_private_chats" }
+  | { type: "all_group_chats" }
   | { type: "chat"; chat_id: number };
 
 export interface ReactionTypeEmoji {
