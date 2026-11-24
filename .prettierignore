@@ -1,0 +1,4 @@
+/devenv.lock
+/pnpm-lock.yaml
+/worker-configuration.d.ts
+/.wrangler

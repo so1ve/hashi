@@ -1,0 +1,21 @@
+# Copy to .dev.vars for local `pnpm run dev` (never commit .dev.vars).
+# In production, set secrets via `wrangler secret put <NAME>`.
+
+# Required: Telegram Bot API token from @BotFather
+BOT_TOKEN=""
+
+# Required: Admin Telegram supergroup ID with Topics enabled (e.g. -1001234567890)
+GROUP_ID=""
+
+# Recommended: Public HTTPS origin where Hashi is reachable (used for webhook, Mini App URL, Turnstile hostname check)
+PUBLIC_BASE_URL="https://hashi.example.com"
+
+# Optional: Custom secret token for Telegram webhook & POST /api/setup (derived via HMAC-SHA256 from BOT_TOKEN if omitted)
+# WEBHOOK_SECRET=""
+
+# Optional: Cloudflare Turnstile credentials for human verification
+# TURNSTILE_SITE_KEY=""
+# TURNSTILE_SECRET_KEY=""
+
+# Optional: Comma-separated allowed hostnames for Turnstile siteverify (defaults to PUBLIC_BASE_URL hostname)
+# TURNSTILE_HOSTNAMES=""

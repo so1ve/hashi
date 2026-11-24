@@ -1,77 +1,111 @@
 # 橋 Hashi
 
-A Telegram two-way chatbot implemented using Cloudflare Workers
+A lightweight, two-way Telegram contact relay bot built for **Cloudflare Workers (D1)** and **Node.js (SQLite)**.
 
 English | [简体中文](./README_ZH.md)
 
 ## Features
 
-- Supports two-way communication for various message types including text, images, and more
-- (Optional) human verification based on Cloudflare Turnstile
+- **Forum-topic relay**: Each private user gets a dedicated topic in your admin supergroup with bidirectional forwarding for text, media, stickers, files, replies, and message edits.
+- **Zero-clutter delivery feedback**: Uses native Telegram message reactions (`👍`) instead of temporary confirmation messages.
+- **Optional human verification**: Cloudflare Turnstile inside a Telegram Mini App with signed state tokens, Telegram `initData` validation, and lazy topic creation (bots cannot spam topics before passing verification).
+- **Stateless & reliable**: Proper SQL migrations, DB-persisted admin settings, authenticated Telegram webhooks (`X-Telegram-Bot-Api-Secret-Token`), and automatic recovery if a topic is closed or deleted.
+- **Dual runtime**: Deploy on Cloudflare Workers + D1 or self-host with Node.js 24+ / Docker + built-in `node:sqlite`.
 
-## Deployment
+## Prerequisites
 
-### Create a Telegram Bot
+1. Create a bot via `@BotFather` and save `BOT_TOKEN`.
+2. Create a Telegram supergroup, enable **Topics**, add the bot as an **Administrator** with **Manage Topics** permission, and record its negative `GROUP_ID` (e.g. `-1001234567890`).
+3. _(Optional)_ Create a widget in [Cloudflare Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile) and record `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`.
 
-1. Search for `@BotFather` in Telegram and start a conversation.
-2. Send `/newbot` or click the `Open` button, and follow the prompts to create a new bot.
-3. After creation, remember to save the `BOT_TOKEN` you receive.
+## Deploy (Cloudflare Workers + D1)
 
-### Create a Chat Group
+### One-click deploy
 
-1. Create a Telegram group and enable the topics feature for the group.
-2. Add the bot as an administrator. It's recommended to grant all permissions (message management, topic management).
-3. Use `@getidsbot` to get the group ID (add it to the group chat), and remember the `GROUP_ID` you receive.
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/so1ve/hashi)
 
-### (Optional) Get Cloudflare Turnstile Keys
+Cloudflare automatically provisions the D1 database (`DB`), applies `migrations/`, and deploys the Worker.
 
-Visit [Cloudflare Dashboard](https://dash.cloudflare.com/?to=/:account/turnstile), create a widget, and you can fill in any hostname for now. Get and remember the `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`.
+1. Click **Deploy to Cloudflare** above and finish creating the Worker.
+2. Open the Worker's **Settings → Variables and Secrets** and add:
+   - `BOT_TOKEN` (Secret): Bot token from `@BotFather`
+   - `GROUP_ID` (Variable/Secret): Admin forum supergroup ID (e.g. `-1001234567890`)
+   - _(Optional)_ `PUBLIC_BASE_URL`: Custom domain if you attach one (otherwise inferred from the incoming request URL)
+   - _(Optional)_ `TURNSTILE_SITE_KEY` & `TURNSTILE_SECRET_KEY`: Enable Cloudflare Turnstile verification (add your Worker hostname to the Turnstile widget)
+3. Visit your deployed Worker URL (`https://<your-worker>.workers.dev/`), click **Register webhook**, paste `BOT_TOKEN` (or `WEBHOOK_SECRET`), and click **Register**.
 
-### Deploy to Cloudflare Workers
+### Manual deploy
 
-First, fork this repository to your GitHub account. Then click the button below to deploy:
+```bash
+pnpm install
+pnpm exec wrangler d1 create hashi
+# Put the returned database_id into wrangler.jsonc (or wrangler.prod.jsonc)
 
-[<img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare">](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create/import-repository)
+pnpm exec wrangler secret put BOT_TOKEN
+pnpm exec wrangler secret put GROUP_ID
+pnpm exec wrangler secret put PUBLIC_BASE_URL       # e.g. https://hashi.example.com
+# Optional:
+pnpm exec wrangler secret put TURNSTILE_SITE_KEY
+pnpm exec wrangler secret put TURNSTILE_SECRET_KEY
 
-1. Select your GitHub account and the forked repository, then click `Continue`.
-2. Fill in any name, then click `Create and Deploy`.
-3. After the deployment fails, click `Continue` to enter the dashboard page.
-4. Click `Settings`, and add the following environment variables in `Variables and Secrets`:
-   - `BOT_TOKEN`: The bot token obtained from BotFather
-   - `GROUP_ID`: The group ID obtained from the backend group
-   - (Optional) `TURNSTILE_SITE_KEY`: Cloudflare Turnstile Site Key
-   - (Optional) `TURNSTILE_SECRET_KEY`: Cloudflare Turnstile Secret Key
-5. Click `Save and Deploy`, and wait for the deployment to complete.
+pnpm run deploy
+```
 
-After deployment is complete, go back to the `Overview` page, copy the domain from `Domains & Routes`, and return to the Turnstile dashboard to add the domain to the `Hostnames` list of the widget you created.
+Then register the Telegram webhook and scoped commands once:
 
-## Usage
+```bash
+BOT_TOKEN="..." GROUP_ID="-100..." PUBLIC_BASE_URL="https://hashi.example.com" pnpm run setup
+```
 
-### Communication
+Or via HTTP (accepts either `WEBHOOK_SECRET` or `BOT_TOKEN`):
 
-1. Search for and open your bot in Telegram, then click the `Start` button.
-2. The bot will send a message, follow the prompts to complete human verification.
-3. After successful verification, you can start bidirectional communication with the bot!
+```bash
+curl -X POST https://hashi.example.com/api/setup \
+  -H "Authorization: Bearer $BOT_TOKEN"
+```
 
-### Administration
+## Self-Hosting (Node.js / Docker)
 
-In the backend group, you can use the following commands in the `General` topic for management:
+```bash
+cp .dev.vars.example .dev.vars
+# Edit .dev.vars with BOT_TOKEN, GROUP_ID, PUBLIC_BASE_URL
 
-- `/settings`: Modify settings and prompt text.
+pnpm run setup
+pnpm run start
+```
 
-In the topic where you're conversing with a user, you can use the following commands:
+Or with Docker:
 
-- `/block`: Block bidirectional chat with the current user.
-- `/unblock`: Unblock the current user.
+```bash
+docker build -t hashi .
+docker run -d -p 8787:8787 -v hashi-data:/data \
+  -e BOT_TOKEN="..." \
+  -e GROUP_ID="-100..." \
+  -e PUBLIC_BASE_URL="https://hashi.example.com" \
+  hashi
+```
 
-### Human Verification
+## Admin Commands
 
-You can enable or disable the human verification feature in the settings. If enabled, users need to complete verification before starting communication with the bot; if disabled, users can communicate directly with the bot. Enabling human verification requires providing `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` during deployment.
+In the **General** topic of your admin group:
 
-## Credits
+- `/settings` — Toggle features (delivery reaction, Turnstile verification, new chat notifications) and edit bot messages.
+- `/cancel` — Cancel an in-progress message edit.
 
-This project was inspired by [ctt](https://github.com/iawooo/ctt). Thanks to [iawooo](https://github.com/iawooo) for the excellent work!
+Inside any **user topic**:
 
-## 📝 License
+- `/info` — Show user details with quick inline buttons (Block/Unblock, Verify/Revoke).
+- `/block` — Block the user from messaging.
+- `/unblock` — Unblock the user.
 
-[MIT](./LICENSE). Made with ❤️ by [Ray](https://github.com/so1ve)
+## Development
+
+```bash
+pnpm install
+pnpm run cf-typegen
+pnpm run check
+```
+
+## License
+
+[MIT](./LICENSE). Made with ❤️ by [Ray](https://github.com/so1ve).

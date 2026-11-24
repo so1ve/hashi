@@ -1,77 +1,111 @@
 # 橋 Hashi
 
-一个基于 Cloudflare Workers 实现的 Telegram 双向机器人
+一个轻量、可靠的 Telegram 双向联系机器人，同时支持 **Cloudflare Workers (D1)** 与 **Node.js (SQLite)** 双运行时。
 
 [English](./README.md) | 简体中文
 
-## 功能
+## 功能特性
 
-- 支持文本、图片等多种消息类型的双向通信
-- 可选的基于 Cloudflare Turnstile 的人机验证
+- **话题双向转发**：每位私聊用户对应后台超群中的一个独立话题，支持文本、图片、文件、贴纸等各类消息，以及双向引用回复和编辑同步。
+- **无感送达反馈**：使用 Telegram 原生消息回应（`👍`）代替会刷屏并阻塞请求的临时提示消息。
+- **可选人机验证**：基于 Cloudflare Turnstile 的 Telegram Mini App，支持签名状态校验、Telegram `initData` 验证，且**先验证后建话题**，彻底防止机器人刷屏建 topic。
+- **无状态高可靠**：基于 SQL 迁移管理表结构、数据库持久化设置编辑状态、Webhook 强制密钥验签（`X-Telegram-Bot-Api-Secret-Token`），并在话题被关闭或删除时自动恢复。
+- **双运行时支持**：可部署在 Cloudflare Workers + D1，也可使用 Node.js 24+ / Docker + 内置 `node:sqlite` 自托管。
 
-## 部署
+## 准备工作
 
-### 创建 Telegram 机器人
+1. 通过 `@BotFather` 创建机器人，获取 `BOT_TOKEN`。
+2. 创建一个 Telegram 群组并开启**话题（Topics）**功能，将机器人设为**管理员**并授予**管理话题**权限，获取群组 ID `GROUP_ID`（如 `-1001234567890`）。
+3. _（可选）_ 在 [Cloudflare Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile) 创建小组件，获取 `TURNSTILE_SITE_KEY` 和 `TURNSTILE_SECRET_KEY`。
 
-1. 在 Telegram 中搜索 `@BotFather` 并开始对话。
-2. 发送 `/newbot` 或点击 `Open` 按钮，并按照提示创建一个新的机器人。
-3. 创建完成后，记住获取到的 `BOT_TOKEN`。
+## 部署（Cloudflare Workers + D1）
 
-### 创建后台群组
+### 一键部署
 
-1. 创建一个 Telegram 群组，并打开群组的话题功能。
-2. 添加机器人为管理员，建议权限全给（消息管理，话题管理）
-3. 通过 `@getidsbot` 获取群组 ID （拉进群聊），记住获取到的 `GROUP_ID`。
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/so1ve/hashi)
 
-### （可选）获取 Cloudflare Turnstile 密钥
+Cloudflare 会自动创建 D1 数据库（`DB`）、执行 `migrations/` 迁移并部署 Worker。
 
-访问 [Cloudflare Dashboard](https://dash.cloudflare.com/?to=/:account/turnstile)，创建一个小组件，主机名可以先随便填。获取 `TURNSTILE_SITE_KEY` 和 `TURNSTILE_SECRET_KEY` 并记住。
+1. 点击上方的 **Deploy to Cloudflare** 按钮完成创建与部署。
+2. 进入 Worker 的 **设置 → 变量与机密（Variables and Secrets）**，添加：
+   - `BOT_TOKEN`（机密）：从 `@BotFather` 获取的机器人令牌
+   - `GROUP_ID`（变量/机密）：后台话题超群的群组 ID（如 `-1001234567890`）
+   - _（可选）_ `PUBLIC_BASE_URL`：自定义域名（若绑定了自定义域建议填写，留空则自动使用当前访问域名）
+   - _（可选）_ `TURNSTILE_SITE_KEY` 与 `TURNSTILE_SECRET_KEY`：开启 Cloudflare Turnstile 人机验证（记得在 Turnstile 小组件中加入 Worker 域名）
+3. 浏览器打开部署好的 Worker 地址（`https://<your-worker>.workers.dev/`），点击右上角 **Register webhook**，输入 `BOT_TOKEN`（或 `WEBHOOK_SECRET`）并点击 **Register** 即可完成 Webhook 与命令菜单注册。
 
-### 部署到 Cloudflare Workers
+### 手动部署
 
-首先，Fork 本仓库到你的 GitHub 账号下。然后点击下面的按钮进行部署：
+```bash
+pnpm install
+pnpm exec wrangler d1 create hashi
+# 将返回的 database_id 填入 wrangler.jsonc（或 wrangler.prod.jsonc）
 
-[<img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare">](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create/import-repository)
+pnpm exec wrangler secret put BOT_TOKEN
+pnpm exec wrangler secret put GROUP_ID
+pnpm exec wrangler secret put PUBLIC_BASE_URL       # 例如 https://hashi.example.com
+# 可选：
+pnpm exec wrangler secret put TURNSTILE_SITE_KEY
+pnpm exec wrangler secret put TURNSTILE_SECRET_KEY
 
-1. 选择你的 GitHub 账号和 Fork 的仓库，点击 `继续`。
-2. 随便填写一个名称，点击 `创建和部署`。
-3. 在部署失败后，点击 `继续`，进入仪表盘页面。
-4. 点击 `设置`，在 `变量与机密` 处中添加以下环境变量：
-   - `BOT_TOKEN`：在 BotFather 获取的机器人令牌
-   - `GROUP_ID`：在后台群组获取的群组ID
-   - （可选）`TURNSTILE_SITE_KEY`：Cloudflare Turnstile 的 Site Key
-   - （可选）`TURNSTILE_SECRET_KEY`：Cloudflare Turnstile 的 Secret Key
-5. 点击 `保存并部署`，等待部署完成。
+pnpm run deploy
+```
 
-部署完成后，回到 `概述` 页面，复制 `域和路由` 处的域名，并回到 Turnstil e 仪表盘，将域名添加到你创建的小组件的 `主机名` 列表中。
+部署完成后，执行一次初始化以注册 Webhook、校验群组权限并配置分场景命令菜单：
 
-## 使用
+```bash
+BOT_TOKEN="..." GROUP_ID="-100..." PUBLIC_BASE_URL="https://hashi.example.com" pnpm run setup
+```
 
-### 通信
+也可以通过受保护的 HTTP 接口触发初始化（支持传入 `WEBHOOK_SECRET` 或 `BOT_TOKEN`）：
 
-1. 在 Telegram 中搜索并打开你的机器人，点击 `开始` 按钮。
-2. 机器人会发送一条消息，按照提示完成人机验证。
-3. 验证成功后，你就可以开始与机器人进行双向通信了！
+```bash
+curl -X POST https://hashi.example.com/api/setup \
+  -H "Authorization: Bearer $BOT_TOKEN"
+```
 
-### 管理
+## 自托管（Node.js / Docker）
 
-在后台群组中，你可以在 `General` 话题下使用以下命令进行管理：
+```bash
+cp .dev.vars.example .dev.vars
+# 填写 BOT_TOKEN、GROUP_ID、PUBLIC_BASE_URL
 
-- `/settings`：修改设置和提示文本。
+pnpm run setup
+pnpm run start
+```
 
-在和用户对话的话题中，可以使用以下命令：
+或使用 Docker：
 
-- `/block`：禁止当前用户的双向聊天。
-- `/unblock`：解除对当前用户的禁止。
+```bash
+docker build -t hashi .
+docker run -d -p 8787:8787 -v hashi-data:/data \
+  -e BOT_TOKEN="..." \
+  -e GROUP_ID="-100..." \
+  -e PUBLIC_BASE_URL="https://hashi.example.com" \
+  hashi
+```
 
-### 人机验证
+## 管理命令
 
-你可以在设置中开启或关闭人机验证功能。如果开启，用户在开始与机器人通信前需要完成验证；如果关闭，用户可以直接与机器人通信。开启人机验证需要在部署时提供 `TURNSTILE_SITE_KEY` 和 `TURNSTILE_SECRET_KEY`。
+在后台群组的 **General** 话题中：
 
-## 致谢
+- `/settings`：开关功能（送达回应、人机验证、新会话通知）及自定义提示文案。
+- `/cancel`：取消当前正在编辑的文案。
 
-这个项目受到了 [ctt](https://github.com/iawooo/ctt) 的启发。感谢 [iawooo](https://github.com/iawooo) 的出色工作！
+在任意**用户对话话题**中：
 
-## 📝 许可证
+- `/info`：查看用户信息，并提供快捷内联按钮（封禁/解封、标记已验证/撤销验证）。
+- `/block`：封禁该用户。
+- `/unblock`：解除封禁。
 
-[MIT](./LICENSE). Made with ❤️ by [Ray](https://github.com/so1ve)
+## 本地开发与验证
+
+```bash
+pnpm install
+pnpm run cf-typegen
+pnpm run check
+```
+
+## 许可证
+
+[MIT](./LICENSE). Made with ❤️ by [Ray](https://github.com/so1ve).

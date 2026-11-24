@@ -1,6 +1,11 @@
-onlyBuiltDependencies:
-  - cloudflared
-  - esbuild
-  - sharp
-  - unrs-resolver
-  - workerd
+shellEmulator: true
+
+allowBuilds:
+  esbuild: true
+  unrs-resolver: false
+  workerd: true
+
+packageExtensions:
+  "@so1ve/eslint-config":
+    dependencies:
+      typescript: "^6.0.3"
