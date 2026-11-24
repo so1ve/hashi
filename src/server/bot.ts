@@ -98,14 +98,14 @@ function formatUserInfoHtml(user: UserRecord): string {
   const name = escapeHtml(user.displayName || `User ${user.chatId}`);
   const username = user.username ? `@${escapeHtml(user.username)}` : "—";
   const status = user.blocked ? "Blocked" : "Active";
-  const verification = user.verified ? "Verified" : "Unverified";
 
   return [
     "<b>User Info</b>",
     `Name: ${name}`,
     `Username: ${username}`,
     `ID: <a href="tg://user?id=${user.chatId}"><code>${user.chatId}</code></a>`,
-    `Status: <b>${status}</b> · ${verification}`,
+    `Status: <b>${status}</b>`,
+    `Verified: <b>${user.verified ? "Yes" : "No"}</b>`,
   ].join("\n");
 }
 
@@ -1055,7 +1055,7 @@ async function handleCallbackQuery(
       .editMessageText(
         groupId,
         msg.message_id,
-        "<b>Hashi Settings · Features</b>",
+        "<b>Hashi Settings - Features</b>",
         {
           parse_mode: "HTML",
           reply_markup: await settingsFeaturesMarkup(db),
@@ -1076,7 +1076,7 @@ async function handleCallbackQuery(
       .editMessageText(
         groupId,
         msg.message_id,
-        "<b>Hashi Settings · Messages</b>",
+        "<b>Hashi Settings - Messages</b>",
         {
           parse_mode: "HTML",
           reply_markup: await settingsTextsMarkup(db),
@@ -1119,7 +1119,7 @@ async function handleCallbackQuery(
       .editMessageText(
         groupId,
         msg.message_id,
-        "<b>Hashi Settings · Features</b>",
+        "<b>Hashi Settings - Features</b>",
         {
           parse_mode: "HTML",
           reply_markup: await settingsFeaturesMarkup(db),

@@ -26,7 +26,7 @@ export function renderVerifyPage(data: VerifyPageData) {
             name="viewport"
             content="width=device-width, initial-scale=1, viewport-fit=cover"
           />
-          <title>Verification · Hashi</title>
+          <title>Verification - Hashi</title>
           <link rel="stylesheet" href="/styles.css" />
           <script src="https://telegram.org/js/telegram-web-app.js"></script>
         </head>
@@ -76,7 +76,7 @@ export function renderVerifyPage(data: VerifyPageData) {
           name="viewport"
           content="width=device-width, initial-scale=1, viewport-fit=cover"
         />
-        <title>Verification · Hashi</title>
+        <title>Verification - Hashi</title>
         <link rel="preconnect" href="https://challenges.cloudflare.com" />
         <link rel="stylesheet" href="/styles.css" />
         <script src="https://telegram.org/js/telegram-web-app.js"></script>
